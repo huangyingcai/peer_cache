@@ -14,4 +14,6 @@
 
 #include <QtCrypto>
 
+#include "peer_cache_constants.hh"
+
 #endif // PEER_CACHE_INCLUDES_HH
