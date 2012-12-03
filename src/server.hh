@@ -3,6 +3,8 @@
 
 #include "peer_cache_includes.hh"
 
+// FIXME: make Kademlia Client an Interface
+// class PeerCache::Node : public QNetworkAccessManager, public KademliaClient
 
 class Server : public QObject
 {

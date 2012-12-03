@@ -9,5 +9,6 @@ typedef enum { PING = 1, ACK,
 typedef QByteArray QKey;
 typedef QByteArray QNodeId;
 typedef QPair<QHostAddress, quint16> QNodeAddress;
+typedef QPair<QNodeId, QNodeAddress> QNode;
 
 #endif // PEER_CACHE_TYPES_HH

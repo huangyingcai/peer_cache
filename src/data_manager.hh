@@ -23,6 +23,9 @@ class DataServer : public QObject
         QMap<QKey, ifstream>* m_resources;
         QTcpServer* m_tcp_server;
 
+        QMap<QTcpSocket*, QKey>* m_pending_downloads;
+        QMap<QTcpSocket*, Download>* m_in_progress_downloads;
+
         // TODO: command line option to specify where to save data/location of
         // browser cache -- iterate over all files and add them to cache on
         // startup
