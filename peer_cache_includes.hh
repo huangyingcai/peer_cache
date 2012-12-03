@@ -4,9 +4,11 @@
 #include <iostream>
 
 #include <QList>
-#include <QByteArray>
 #include <QMap>
 #include <QVariant>
+#include <QByteArray>
+#include <QHostAddress>
+#include <QDataStream>
 
 #include <QDebug>
 

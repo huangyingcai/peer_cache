@@ -29,6 +29,7 @@ class Server : public QObject
         // void ping_received(const QNode&);
 
     private:
+
         ResourceManager* m_resource_manager;
 
         // RequestManager* m_request_manager;
