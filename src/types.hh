@@ -1,7 +1,8 @@
 #ifndef PEER_CACHE_TYPES_HH
 #define PEER_CACHE_TYPES_HH
 
-typedef enum { PING = 1, ACK,
+typedef enum { JOIN = 1, BOOTSTRAP_OK,
+               PING, ACK,
                STORE, DOWNLOAD,
                FIND_NODE, REPLY_NODE,
                FIND_VALUE, REPLY_VALUE };

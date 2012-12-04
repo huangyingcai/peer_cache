@@ -20,15 +20,14 @@ static QBitArray RequestManager::Distance(QKey a, QKey b)
      return a_bits & b_bits;
 }
 
-RequestManager::RequestManager(QNodeId id, QNodeId bootstrap,
+RequestManager::RequestManager(QNodeId id, QNode bootstrap,
     QObject* parent = 0) : QObject(parent)
 {
     node_id_ = id;
 
     // TODO:Broadcast a join -- just get 1
-    UpdateBucket(Bucket(bootstrap)); // Insert into bucket
+    UpdateBucket(Bucket(bootstrap.first), bootstrap); // Insert into bucket
     Request* req = RequestManager::FindNode(id, bootstrap);
-    InitiateRequest(req->get_id());
 }
 
 quint16 RequestManager::Bucket(QKey key)
@@ -42,8 +41,9 @@ quint16 RequestManager::Bucket(QKey key)
 }
 
 void RequestManager::UpdateRequest(quint32 request_id, QNodeAddress addr,
-    QList<QNodeId> results);
+    QList<QNode> results);
 {
+  // FIXME::
     Request* req;
     if (req = Request.Get(request_id)) {
         req->UpdateResults(results); // Works for PING
@@ -54,18 +54,42 @@ void RequestManager::CloseRequest(quint32 request_id)
 {
     Request* req;
     if (req = Request.Get(request_id)) {
+        RemoveRequest(request_id);
+
+        // Close Children
         QList<quint32>::const_iterator i;
-        for (i = req->children.constBegin(); i != req->children.constEnd();
+        for (i = req->children_.constBegin(); i != req->children_.constEnd();
                 i++) {
             CloseRequest(i->get_id());
         }
-        RemoveRequest(request_id);
+
+        // Close Parent
+        if (req->parent) {
+            CloseRequest(req->parent->get_id());
+        }
     }
 }
 
 void RequestManager::InitiateRequest(quint32 request_id)
 {
-    emit HasRequest(Request.Get(request_id));
+    Request req = Request.Get(request_id);
+    if (req.get_type() == FIND_VALUE || req.get_type() == FIND_NODE) {
+        emit HasRequest(req.get_type(), req.get_id(), req.get_destination(),
+            req.get_requested_key());
+    } else {
+        emit HasRequest(req.get_type(), req.get_id(), req.get_destination(),
+            QByteArray());
+    }
+}
+
+void IssueStore(QKey key)
+{
+    QList<QNode> closest = ClosestNodes(key, 1);
+
+    if (closest.isEmpty()) return; // This node is supposed to store it
+
+    QNode = closest.takeFirst();
+    Request.StoreRequest(QNode, QKey);
 }
 
 QList<QNode> RequestManager::ClosestNodes(QKey key, quint16 num)
@@ -84,20 +108,26 @@ QList<QNode> RequestManager::ClosestNodes(QKey key, quint16 num)
     return nodes;
 }
 
+// FIXME: this is so bad
 void RequestManager::RefreshBucket(quint16 bucket)
 {
-    QBitArray bits(kKeySize * 8, 0);
-    for (int b = bucket; b >= 0; b--) {
-        bits[b] = rand() % 2;
-    }
+    ERROR("NOT IMPLEMENTED- REFRESH BUCKET");
+    return;
 
-    QNodeId random_node_id;
-    for (int b = 0; b < bits.count(); b++) {
-          random_node_id[b/8] =
-              (random_node_id.at(b / 8) | ((bits[b] ? 1 : 0) << (b % 8)));
-    }
-
-    Request::PingRequest(random_node_id);
+//     QBitArray bits(kKeySize * 8, 0);
+//     // FIXME: this is backwards?
+//     for (int b = kKeySize - bucket; b <= kKeySize; b++) {
+//         bits[b] = rand() % 2;
+//     }
+// 
+//     QNodeId random_node_id;
+//     for (int b = 0; b < bits.count(); b++) {
+//           random_node_id[b/8] =
+//               (random_node_id.at(b / 8) | ((bits[b] ? 1 : 0) << (b % 8)));
+//     }
+// 
+//     // FIXME:
+//     Request::PingRequest(random_node_id);
 }
 
 void RequestManager::UpdateBucket(quint16 bucket, QNode node);
@@ -127,11 +157,6 @@ static QList<quint32, Request> RequestManager::Request::get_requests()
 static void RegisterRequest(quint32 id, const Request* req)
 {
     requests_.insert(id, *req); // Add to list of all requests
-    if (req->parent != 0) { // Connect to parent if exists
-        Request* par = Get(req->parent);
-        connect(child, SIGNAL(ChildComplete(quint32)), par,
-            SLOT(ProcessChildCompletion(quint32))); // TODO: Qt::QueuedConnection?
-    }
 }
 
 static void RequestManager::Request::RemoveRequest(quint32 id)
@@ -140,50 +165,40 @@ static void RequestManager::Request::RemoveRequest(quint32 id)
 }
 
 // Factory methods
-static quint32 RequestManager::PingRequest(QNodeId dest, QObject* observer,
+static quint32 RequestManager::PingRequest(QNode dest, QObject* observer,
     Request* parent = NULL)
 {
-    PingRequest new_request(PING, dest, (parent ? parent->id_ : 0));
-    connect(&new_request, SIGNAL(Ready(quint32)), observer,
-        SLOT(InitiateRequest(quint32)));
-    connect(&new_request, SIGNAL(Complete(quint32)), observer,
-        SLOT(CloseRequest(quint32)));
+    PingRequest new_request(dest, observer, (parent ? parent->id_ : 0));
     return new_request.get_id();
 }
 
-static quint32 RequestManager::FindNodeRequest(QNodeId dest, QNodeId id,
+static quint32 RequestManager::FindNodeRequest(QNode dest, QNodeId id,
     QObject* observer, Request* parent = NULL)
 {
-    FindNodeRequest new_request(PING, dest, key, (parent ? parent->id_ : 0));
-    connect(&new_request, SIGNAL(Ready(quint32)), observer,
-        SLOT(InitiateRequest(quint32)));
-    connect(&new_request, SIGNAL(Complete(quint32)), observer,
-        SLOT(CloseRequest(quint32)));
+    FindNodeRequest new_request(dest, key, observer,
+        (parent ? parent->get_id() : 0));
     return new_request.get_id();
 }
 
-static quint32 RequestManager::FindValueRequest(QNodeId dest, QUrl url,
+static quint32 RequestManager::FindValueRequest(QNode dest, QUrl url,
     QObject* observer, Request* parent = NULL)
 {
-    FindValueRequest new_request(PING, dest, url, (parent ? parent->id_ : 0));
-    connect(&new_request, SIGNAL(Ready(quint32)), observer,
-        SLOT(InitiateRequest(quint32)));
-    connect(&new_request, SIGNAL(Complete(quint32)), observer,
-        SLOT(CloseRequest(quint32)));
-    connect(&new_request, SIGNAL(ResourceNotFound(QUrl)), observer,
-        SLOT(GetResource(QUrl)), Qt::QueuedConnection); // TODO: name of slot
+    FindValueRequest new_request(dest, url, observer,
+        (parent ? parent->id_ : 0));
     return new_request.get_id();
 }
 
 // Base class Implementation
 
-RequestManager::Request(int type, QNodeId dest, quint32 parent)
+RequestManager::Request(int type, QNode dest, QObject* observer,
+    Request* parent)
 {
     id_ = Request.RandomId();
     type_ = type;
     parent_ = parent;
     children_ = QList<quint32>();
-    Request.RegisterRequest(id_, this);
+    Init();
+    emit Ready(id_);
 }
 
 RequestManager::Request::Request(const Request& other)
@@ -192,29 +207,56 @@ RequestManager::Request::Request(const Request& other)
     type_ = other.type_;
     destination_ = other.destination_;
     parent_ = other.parent_;
+    observer_ = other.observer_;
     children_ = other.children_;
+    Init();
 }
 
-virtual void UpdateResults(QList<QNodeId> results = QList())
+void Init()
 {
-    (parent) ? emit ChildComplete(id_) : emit Complete(id_)
+    connect(this, SIGNAL(Ready(quint32)), observer_,
+        SLOT(InitiateRequest(quint32)), Qt::QueuedConnection);
+    connect(this, SIGNAL(Complete(quint32)), observer_,
+        SLOT(CloseRequest(quint32)), Qt::QueuedConnection);
+
+    if (parent_) {
+        connect(this, SIGNAL(Complete(quint32)), parent_,
+            SLOT(ProcessChildCompletion(quint32)), Qt::QueuedConnection);
+        parent_->AddChild(id_);
+    }
+
+    Request.RegisterRequest(id_, this);
+}
+
+void AddChild(quint32 id)
+{
+    children_.append(id);
+}
+
+virtual void UpdateResults(QList<QNode> results = QList())
+{
+    emit Complete(id_);
 }
 
 // Ping Request
 
-RequestManager::PingRequest::PingRequest(QNode dest, quint32 parent = 0) :
-    Request(PING, dest, parent) {}
+// FIXME: interface for RequestManager?  or Request Observer??? -- signals, etc
+RequestManager::PingRequest::PingRequest(QNode dest, QObject* observer,
+    Request* parent = NULL) : Request(PING, dest, observer, parent) {}
 
 RequestManager::PingRequest::PingRequest(const PingRequest& other) :
     Request(other) {}
 
+// StoreRequest
+
 // Find Request
 
 RequestManager::FindRequest::FindRequest(int type, QNode dest, QKey key,
-    quint32 parent = 0) : Request(type, dest, parent)
+    QObject* observer, Request* parent = NULL) :
+    Request(type, dest, observer, parent)
 {
     requested_key_ = key;
-    results_ = QList<QNodeId>();
+    results_ = QList<QNode>();
 }
 
 RequestManager::FindRequest::FindRequest(const FindRequest& other) :
@@ -224,121 +266,112 @@ RequestManager::FindRequest::FindRequest(const FindRequest& other) :
     results_ = other.results_;
 }
 
-void RequestManager::FindRequest::UpdateResults(QList<QNodeId> results)
+virtual void RequestManager::FindRequest::UpdateResults(QList<QNode> results)
 {
     if (parent) { // i.e. it's a child
         results_ = results;
-        emit ChildComplete(this);
     } else {
-        QList<QNodeId> sorted;
+        QList<QNode> sorted;
         // TODO: DRY
         // Basic insertion sort (okay because n is small)
         sorted.insert(results.takeFirst());
         while (!results.isEmpty()) {
-            QNodeId cur_id = results.takeFirst();
-            QList<QNodeId>::const_iterator i;
+            QNode cur_node = results.takeFirst();
+            QList<QNode>::const_iterator i;
             for (i = sorted.constBegin(); i != sorted.constEnd(); i++) {
-                quint16 cur_dist = RequestManager.Distance(cur_id, requested_key_);
+                quint16 cur_dist = RequestManager.Distance(cur_node.first, requested_key_);
                 quint16 dist = RequestManager.Distance(*i, requested_key_);
                 if (cur_dist > dist) break;
             }
-            sorted.insert(i, cur_id);
+            sorted.insert(i, cur_node);
         }
 
-        QList<QNodeId>::const_iterator i, j;
+        QList<QNode>::const_iterator i, j;
         for (i = sorted.constBegin(); i != sorted.constEnd(); i++) {
             if (results_.indexOf(*i) > 0) continue;
             if (results_.size() < kBucketSize) {
                 results_.append(*i);
-                MakeChildFind(*i);
+                MakeChild(*i);
             } else {
                 for (j = results_.constBegin(); j != results_.constEnd();
                         j++) {
-                    quint16 new_dist = RequestManager.Distance(*id, requested_key_);
+                    quint16 new_dist =
+                        RequestManager.Distance(i->first, requested_key_);
                     quint16 dist = RequestManager.Distance(*j, requested_key_);
                     if (new_dist > dist) {
                         results_.insert(j, *i);
                         results_.removeLast();
-                        MakeChildFind(*i);
+                        MakeChild(*i);
                     }
                 }
             }
         }
-
-        if (children_.isEmpty()) {
-            emit Complete(id_);
-        } else {
-            emit Ready(id_); // FIXME: figure out signals; also, when ping is done, need to re-request
-        }
     }
 }
-virtual void RequestManager::FindRequest::ProcessChildCompletion(Request* child)
+virtual void RequestManager::FindRequest::ProcessChildCompletion(
+    quint32 child_id)
 {
     if (child.type_ == FIND_NODE || child.type_ == FIND_VALUE) {
-        UpdateResults(child->results_);
+        Request* child = Requests.Get(child_id);
+        UpdateResults(child.results_);
+        children_.remove(child_id);
+        if (children_.isEmpty()) emit Complete(id_);
+    } else if (child.type_ == PING) {
+        children_.remove(child_id_);
+        emit Ready(id_);
     }
-    children_.remove(child->id_);
-    emit Ready(id_);
+}
+
+void MakeChild(QNode dest)
+{
+      if (type_ == FIND_NODE) {
+          Request.FindNodeRequest(dest, requested_key_, observer_, this);
+      } else { // FIND_VALUE
+          Request.FindValueRequest(dest, requested_url_, observer_, this);
+      }
 }
 
 // Find Node Request
 
 RequestManager::FindNodeRequest::FindNodeRequest(QNode dest, QKey key,
-    quint32 parent = 0) : FindRequest(FIND_NODE, dest, key, parent) {}
-
-quint32 RequestManager::FindNodeRequest::MakeChild(int type, QNode dest)
-{
-    quint32 child_id;
-    if (type == PING) {
-        child_id = Request.PingRequest(dest, id_);
-    }
-    parent.children_.insert(child_id);
-    emit Ready(child_id);
-    return child_id;
-}
+    QObject* observer, Request* parent = 0) :
+    FindRequest(FIND_NODE, dest, key, observer, parent) {}
 
 // Find Value Request
 
-RequestManager::FindValueRequest::FindValueRequest(QNode dest, QKey key,
-    quint32 parent = 0) : FindRequest(FIND_VALUE, dest, key, parent) {}
-
 RequestManager::FindValueRequest::FindValueRequest(QNode dest, QUrl url,
-    quint32 parent = 0) : FindRequest(FIND_VALUE, dest, QByteArray(), parent) {}
+    QObject* observer, Request* parent = 0) :
+    FindRequest(FIND_VALUE, dest, QByteArray(), observer, parent)
+{
     requested_url_ = url;
     requested_key_ =
         QCA::Hash("sha1").hash(QByteArray(url.toEncoded())).toByteArray();
+    connect(&new_request, SIGNAL(ResourceNotFound(QUrl)), observer,
+        SLOT(GetResource(QUrl)), Qt::QueuedConnection);
+}
+
+RequestManager::FindValueRequest::FindValueRequest(QNode dest, QUrl url,
+    QKey key, QObject* observer, Request* parent = 0) :
+    FindRequest(FIND_VALUE, dest, key, observer, parent)
+{
+    requested_url_ = url;
+    requested_key_ = key;
+    connect(&new_request, SIGNAL(ResourceNotFound(QUrl)), observer,
+        SLOT(GetResource(QUrl)), Qt::QueuedConnection);
 }
 
 RequestManager::FindValueRequest::FindValueRequest(
     const FindValueRequest& other) : FindRequest(other)
 {
     requested_url_ = url;
+    connect(&new_request, SIGNAL(ResourceNotFound(QUrl)), observer,
+        SLOT(GetResource(QUrl)), Qt::QueuedConnection);
 }
 
-virtual void RequestManager::FindNode::UpdateResults(QList<QNodeId> results)
+virtual void RequestManager::FindNode::UpdateResults(QList<QNode> results)
 {
     super(results);
     if (children_.isEmpty()) {
         emit ResourceNotFound(requested_url_);
     }
-}
-
-// FIXME:
-// FIXME: SIGNALS AND SLOTS
-// FIXME: Factory Methods
-
-quint32 RequestManager::Request::MakeChildFind(QNodeId dest)
-{
-    quint32 child_id = 0;
-    if (type_ == FIND_VALUE) {
-      // TODO: get rid of value/node distinction
-        child_id =
-            Request.FindValueRequest(type_, requested_url_, dest, id_);
-    } else { // FIND_NODE
-        child_id =
-            Request.FindNodeRequest(type_, requested_key_, dest, id_);
-    }
-    parent.children_.insert(child_id);
-    emit Ready(child_id);
-    return child_id;
 }

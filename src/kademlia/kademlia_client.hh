@@ -18,40 +18,39 @@ public KademliaClient : public QObject
     public slots:
 
 
-    private slots:
-        ReadPendingDatagrams();
-        ProcessDatagram(QNodeAddress addr, QVariantMap message);
-        SendDatagram(QNodeAddress dest, QVariantMap& message);;
+    protected slots:
+        void ReadPendingDatagrams();
+        void ProcessDatagram(QNodeAddress addr, QVariantMap message);
+        void SendDatagram(QNodeAddress dest, QVariantMap& message);;
 
-        SendRequest(QNodeAddress dest, quint32 request_id, QVariantMap message);
-        SendPing(QNodeAddress dest, quint32 request_id);
-        SendStore(QNodeAddress dest, quint32 request_id, QKey key);
-        SendFindNode(QNodeAddress dest, quint32 request_id, QNodeId id);
-        SendFindValue(QNodeAddress dest, quint32 request_id, QKey key);
+        void ProcessNewRequest(int type, quint32 request_id, QNode dest, QKey key);
+        void SendRequest(QNodeAddress dest, quint32 request_id, QVariantMap message);
+        void SendPing(QNodeAddress dest, quint32 request_id);
+        void SendStore(QNodeAddress dest, quint32 request_id, QKey key);
+        void SendFindNode(QNodeAddress dest, quint32 request_id, QNodeId id);
+        void SendFindValue(QNodeAddress dest, quint32 request_id, QKey key);
 
-        SendReply(QNodeAddress dest, quint32 request_id, QVariantMap message)
-        ReplyPing(QNodeAddress dest, quint32 request_id)
+        void SendReply(QNodeAddress dest, quint32 request_id, QVariantMap message)
+        void ReplyPing(QNodeAddress dest, quint32 request_id)
         // NOTE: ReplyDownload does not exist. Downloads (i.e. replies to store) are
         // handled by the data manager.
-        ReplyFindNode(QNodeAddress dest, quint32 request_id, QNodeId id)
-        ReplyFindValue(QNodeAddress dest, quint32 request_id, QKey key)
+        void ReplyFindNode(QNodeAddress dest, quint32 request_id, QNodeId id)
+        void ReplyFindValue(QNodeAddress dest, quint32 request_id, QKey key)
 
     signals:
         void DatagramReady(QNodeAddress, QVariantMap);
         void RequestReady(QNodeAddress, QVariantMap);
         void ReplyReady(QNodeAddress, quint32, QKey);
 
-        void AckReceived(QNodeAddress, quint32);
-        void StoreReceived(QNodeAddress, quint32, QKey);
+        void ResponseReceived(quint32 request_id,
+            QList<QNode> nodes = QList<QNode>());
         void ValueFound(QNodeAddress, quint32, QKey);
-        void NodesFound(QNodeAddress, quint32, QKey); // update request
 
     protected:
-        const static quint16 kDefaultPort = 42600; // TODO: right place?
-        // const static quint16 kDefaultBufferSize = 8192;
+        const static quint16 kDefaultPort = 42600;
 
         QUdpSocket* udp_socket_;
-        DataManager* data_manager_;
+        DataStore* data_store_;
         RequestManager* request_manager_;
 };
 

@@ -12,19 +12,19 @@ class RequestManager : public QObject
     public:
         RequestManager(QNodeId id, QObject* parent = 0);
 
-        // http://qt-project.org/wiki/WorkingWithRawData
         static QBitArray Distance(QKey a, QKey b);
-        // static quint16 toInt(QBitArray arr);
         quint16 Bucket(QKey key);
 
     public slots:
         void UpdateRequest(quint32 request_id, QNodeAddress addr,
-            QList<QNodeId> results = QList<QNodeId>());
+            QList<QNode> results);
         void CloseRequest(quint32 request_id);
         void InitiateRequest(quint32 request_id);
 
+        void IssueStore(QKey key); // TODO: get rid of this
+
     signals:
-        void HasRequest(Request*);
+        void HasRequest(int, quint32, QNode, QKey);
 
     private:
         QNodeId node_id_;
@@ -39,34 +39,34 @@ class RequestManager : public QObject
             Q_OBJECT
 
             public:
-                // Factory Methods -- TODO - this is sloppy
                 static void RegisterRequest(quint32 id, const Request* req);
                 static void RemoveRequest(quint32 id);
-                static quint32 PingRequest(QNodeId dest, QObject* observer,
+                // Factory Methods -- TODO - this is sloppy
+                static quint32 PingRequest(QNode dest, QObject* observer,
                     Request* parent = NULL);
-                // static quint32 StoreRequest() TODO
+                // static quint32 StoreRequest() TODO - timer, etc
                 static quint32 FindNodeRequest(QNode dest, QNodeId id,
                     QObject* observer, Request* parent = NULL);
-                static quint32 FindNodeRequest(QNode dest, QUrl url,
+                static quint32 FindValueRequest(QNode dest, QUrl url,
                     QObject* observer, Request* parent = NULL);
 
-                static quint32 RandomId();
                 static QList<quint32, Request> get_requests();
+                static quint32 RandomId();
                 static Request* Get(quint32 id);
 
-                Request(int type, QNode dest, quint32 parent);
+                Request(int type, QNode dest, QObject* observer,
+                    Request* parent = NULL);
                 Request(const Request& other);
+                void Init();
+
                 quint32 get_id { return id_; };
 
-                virtual void UpdateResults(QList<QNodeId> results);
-
-            public slots:
+                void AddChild(quint32 id);
+                virtual void UpdateResults(QList<QNode> results = QList()); 
 
             signals:
-                //FIXME
-                void Ready(quint32); // FIXME: connect to has_whatever
+                void Ready(Request*);
                 void Complete(quint32);
-                void ChildComplete(quint32);
 
             private:
                 static QHash<quint32, Request> requests_;
@@ -74,46 +74,60 @@ class RequestManager : public QObject
                 quint32 id_;
                 int type_;
                 QNode destination_
-                quint32 parent_;
+                Request* parent_;
+                QObject* observer_;
                 QList<quint32> children_;
         };
 
         class PingRequest : public Request
         {
             public:
-                PingRequest(QNode dest, quint32 parent = 0);
+                PingRequest(QNode dest, QObject* observer, quint32 parent = 0);
                 PingRequest(const PingRequest& other);
+        };
+
+        class StoreRequest : public Request
+        {
+            public:
+              //FIXME
+                StoreRequest(QNode dest, QKey key, QObject* observer,
+                    quint32 parent = 0);
+                StoreRequest(const PingRequest& other);
         };
 
         class FindRequest : public Request
         {
             public:
-                FindRequest(int type, QNode dest, QKey key, quint32 parent = 0);
+                FindRequest(int type, QNode dest, QKey key, QObject* observer,
+                    quint32 parent = 0);
                 FindRequest(const FindRequest& other);
 
-                virtual void UpdateResults(QList<QNodeId> results);
-                virtual void MakeChild(QNode dest) = 0;
                 void ProcessChildCompletion(Request* child);
+                virtual void UpdateResults(QList<QNode> results);
+                void MakeChild(QNode dest);
 
             private:
                 QKey requested_key_;
-                QList<QNodeId> results_;
+                QList<QNode> results_;
         };
 
         class FindNodeRequest : public FindRequest
         {
             public:
-                FindNodeRequest(QNode dest, QKey key, quint32 parent = 0);
+                FindNodeRequest(QNode dest, QKey key, QObject* observer,
+                    quint32 parent = 0);
         };
 
         class FindValueRequest : public FindRequest
         {
             public:
-                FindValueRequest(QNode dest, QKey key, quint32 parent = 0);
-                FindValueRequest(QNode dest, QUrl url, quint32 parent = 0);
+                FindValueRequest(QNode dest, QUrl url, QObject* observer,
+                    quint32 parent = 0);
+                FindValueRequest(QNode dest, QUrl url, QKey key, QObject* observer,
+                    quint32 parent = 0);
                 FindValueRequest(const FindValueRequest& other);
 
-                virtual void UpdateResults(QList<QNodeId> results);
+                virtual void UpdateResults(QList<QNode> results);
 
             signals:
                 void ResourceNotFound(QUrl);
