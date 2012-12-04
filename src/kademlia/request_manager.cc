@@ -124,42 +124,14 @@ static QList<quint32, Request> RequestManager::Request::get_requests()
     return requests_;
 }
 
-static ConnectToParent(Request* child, Request* parent)
+static void RegisterRequest(quint32 id, const Request* req)
 {
-    connect(child, SIGNAL(ChildComplete(quint32)), parent,
-        SLOT(ProcessChildCompletion(quint32))); // TODO: Qt::QueuedConnection?
-}
-
-// TODO: DRY!!!
-static Request* RequestManager::Request::PingRequest(int type, QNodeId dest,
-    Request* parent = NULL)
-{
-    Request new_request(PING, dest, (parent ? parent->id_ : 0));
-
-    requests_.insert(new_request->get_id(), new_request);
-    if (parent) ConnectToParent(new_request, parent);
-
-    return new_request->get_id();
-}
-
-static quint32 RequestManager::Request::FindValueRequest(QNodeId dest,
-    QUrl url, Request* parent = NULL)
-{
-    Request new_request(FIND_VALUE, dest, url, (parent ? parent->id_ : 0));
-    requests_.insert(new_request->get_id(), new_request);
-    if (parent) ConnectToParent(new_request, parent);
-
-    return new_request->get_id();
-}
-
-static quint32 RequestManager::Request::FindNodeRequest(QNodeId dest,
-    QNodeId id, Request* parent = NULL)
-{
-    Request new_request(FIND_NODE, dest, id, (parent ? parent->id_ : 0));
-    requests_.insert(new_request->get_id(), new_request);
-    if (parent) ConnectToParent(new_request, parent);
-
-    return new_request->get_id();
+    requests_.insert(id, *req); // Add to list of all requests
+    if (req->parent != 0) { // Connect to parent if exists
+        Request* par = Get(req->parent);
+        connect(child, SIGNAL(ChildComplete(quint32)), par,
+            SLOT(ProcessChildCompletion(quint32))); // TODO: Qt::QueuedConnection?
+    }
 }
 
 static void RequestManager::Request::RemoveRequest(quint32 id)
@@ -167,33 +139,51 @@ static void RequestManager::Request::RemoveRequest(quint32 id)
     requests_.remove(id);
 }
 
+// Factory methods
+static quint32 RequestManager::PingRequest(QNodeId dest, QObject* observer,
+    Request* parent = NULL)
+{
+    PingRequest new_request(PING, dest, (parent ? parent->id_ : 0));
+    connect(&new_request, SIGNAL(Ready(quint32)), observer,
+        SLOT(InitiateRequest(quint32)));
+    connect(&new_request, SIGNAL(Complete(quint32)), observer,
+        SLOT(CloseRequest(quint32)));
+    return new_request.get_id();
+}
+
+static quint32 RequestManager::FindNodeRequest(QNodeId dest, QNodeId id,
+    QObject* observer, Request* parent = NULL)
+{
+    FindNodeRequest new_request(PING, dest, key, (parent ? parent->id_ : 0));
+    connect(&new_request, SIGNAL(Ready(quint32)), observer,
+        SLOT(InitiateRequest(quint32)));
+    connect(&new_request, SIGNAL(Complete(quint32)), observer,
+        SLOT(CloseRequest(quint32)));
+    return new_request.get_id();
+}
+
+static quint32 RequestManager::FindValueRequest(QNodeId dest, QUrl url,
+    QObject* observer, Request* parent = NULL)
+{
+    FindValueRequest new_request(PING, dest, url, (parent ? parent->id_ : 0));
+    connect(&new_request, SIGNAL(Ready(quint32)), observer,
+        SLOT(InitiateRequest(quint32)));
+    connect(&new_request, SIGNAL(Complete(quint32)), observer,
+        SLOT(CloseRequest(quint32)));
+    connect(&new_request, SIGNAL(ResourceNotFound(QUrl)), observer,
+        SLOT(GetResource(QUrl)), Qt::QueuedConnection); // TODO: name of slot
+    return new_request.get_id();
+}
+
+// Base class Implementation
+
 RequestManager::Request(int type, QNodeId dest, quint32 parent)
 {
     id_ = Request.RandomId();
     type_ = type;
     parent_ = parent;
     children_ = QList<quint32>();
-}
-
-RequestManager::Request::Request(int type, QNodeId id , quint32 parent)
-{
-    id_ = Request.RandomId();
-    type_ = type;
-    parent_ = parent;
-    children_ = QList<quint32>();
-    requested_key_ = id;
-    results_ = QList<QNodeId>();
-}
-RequestManager::Request::Request(int type, QUrl url, quint32 parent)
-{
-    id_ = Request.RandomId();
-    type_ = type;
-    parent_ = parent;
-    children_ = QList<quint32>();
-    requested_url_ = url;
-    requested_key_ =
-        QCA::Hash("sha1").hash(QByteArray(url.toEncoded())).toByteArray();
-    results_ = QList<QNodeId>();
+    Request.RegisterRequest(id_, this);
 }
 
 RequestManager::Request::Request(const Request& other)
@@ -203,12 +193,38 @@ RequestManager::Request::Request(const Request& other)
     destination_ = other.destination_;
     parent_ = other.parent_;
     children_ = other.children_;
-    requested_url_ = other.requested_url_;
+}
+
+virtual void UpdateResults(QList<QNodeId> results = QList())
+{
+    (parent) ? emit ChildComplete(id_) : emit Complete(id_)
+}
+
+// Ping Request
+
+RequestManager::PingRequest::PingRequest(QNode dest, quint32 parent = 0) :
+    Request(PING, dest, parent) {}
+
+RequestManager::PingRequest::PingRequest(const PingRequest& other) :
+    Request(other) {}
+
+// Find Request
+
+RequestManager::FindRequest::FindRequest(int type, QNode dest, QKey key,
+    quint32 parent = 0) : Request(type, dest, parent)
+{
+    requested_key_ = key;
+    results_ = QList<QNodeId>();
+}
+
+RequestManager::FindRequest::FindRequest(const FindRequest& other) :
+    Request(other)
+{
     requested_key_ = other.requested_key_;
     results_ = other.results_;
 }
 
-void RequestManager::Request::UpdateResults(QList<QNodeId> results)
+void RequestManager::FindRequest::UpdateResults(QList<QNodeId> results)
 {
     if (parent) { // i.e. it's a child
         results_ = results;
@@ -250,13 +266,66 @@ void RequestManager::Request::UpdateResults(QList<QNodeId> results)
         }
 
         if (children_.isEmpty()) {
-            if (type_ == FIND_VALUE) {
-                emit MissingResource(requested_url_);
-            }
             emit Complete(id_);
+        } else {
+            emit Ready(id_); // FIXME: figure out signals; also, when ping is done, need to re-request
         }
     }
 }
+virtual void RequestManager::FindRequest::ProcessChildCompletion(Request* child)
+{
+    if (child.type_ == FIND_NODE || child.type_ == FIND_VALUE) {
+        UpdateResults(child->results_);
+    }
+    children_.remove(child->id_);
+    emit Ready(id_);
+}
+
+// Find Node Request
+
+RequestManager::FindNodeRequest::FindNodeRequest(QNode dest, QKey key,
+    quint32 parent = 0) : FindRequest(FIND_NODE, dest, key, parent) {}
+
+quint32 RequestManager::FindNodeRequest::MakeChild(int type, QNode dest)
+{
+    quint32 child_id;
+    if (type == PING) {
+        child_id = Request.PingRequest(dest, id_);
+    }
+    parent.children_.insert(child_id);
+    emit Ready(child_id);
+    return child_id;
+}
+
+// Find Value Request
+
+RequestManager::FindValueRequest::FindValueRequest(QNode dest, QKey key,
+    quint32 parent = 0) : FindRequest(FIND_VALUE, dest, key, parent) {}
+
+RequestManager::FindValueRequest::FindValueRequest(QNode dest, QUrl url,
+    quint32 parent = 0) : FindRequest(FIND_VALUE, dest, QByteArray(), parent) {}
+    requested_url_ = url;
+    requested_key_ =
+        QCA::Hash("sha1").hash(QByteArray(url.toEncoded())).toByteArray();
+}
+
+RequestManager::FindValueRequest::FindValueRequest(
+    const FindValueRequest& other) : FindRequest(other)
+{
+    requested_url_ = url;
+}
+
+virtual void RequestManager::FindNode::UpdateResults(QList<QNodeId> results)
+{
+    super(results);
+    if (children_.isEmpty()) {
+        emit ResourceNotFound(requested_url_);
+    }
+}
+
+// FIXME:
+// FIXME: SIGNALS AND SLOTS
+// FIXME: Factory Methods
 
 quint32 RequestManager::Request::MakeChildFind(QNodeId dest)
 {
@@ -264,31 +333,12 @@ quint32 RequestManager::Request::MakeChildFind(QNodeId dest)
     if (type_ == FIND_VALUE) {
       // TODO: get rid of value/node distinction
         child_id =
-            Request::FindValueRequest(type_, requested_url_, dest, id_);
+            Request.FindValueRequest(type_, requested_url_, dest, id_);
     } else { // FIND_NODE
         child_id =
-            Request::FindNodeRequest(type_, requested_key_, dest, id_);
+            Request.FindNodeRequest(type_, requested_key_, dest, id_);
     }
     parent.children_.insert(child_id);
     emit Ready(child_id);
     return child_id;
 }
-
-
-void RequestManager::Request::ProcessChildCompletion(Request* child)
-{
-    switch (child->type_) {
-        case FIND_NODE:
-            UpdateResults(child->results_);
-            break;
-        case FIND_VALUE:
-            UpdateResults(child->results_);
-            break;
-        case PING:
-        default:
-            break;
-    }
-    children_.remove(child->id_);
-    emit Ready(id_);
-}
-
