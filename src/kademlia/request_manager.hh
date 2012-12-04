@@ -14,7 +14,7 @@ class RequestManager : public QObject
 
         // http://qt-project.org/wiki/WorkingWithRawData
         static QBitArray Distance(QKey a, QKey b);
-        static quint16 toInt(QBitArray arr);
+        // static quint16 toInt(QBitArray arr);
         quint16 Bucket(QKey key);
 
     public slots:
@@ -27,12 +27,28 @@ class RequestManager : public QObject
         void HasRequest(Request*);
 
     private:
+        QNodeId node_id_;
         QList<QNode>[160] buckets_;
 
-        void ClosestNodes(QKey key, quint16 num = kBucketSize);
+        QList<QNode> ClosestNodes(QKey key, quint16 num = kBucketSize);
         void RefreshBucket(quint16 bucket);
         void UpdateBucket(quint16 bucket, QNode node);
 
+        // FIXME: STORE doesn't really need mgmt b/c no verification?
+        // Verify that was downloaded?
+        static Request* PingRequest(QNodeId dest, RequestManager* mgr,
+            Request* parent = NULL);
+        static Request* FindValueRequest(int type, QNodeId dest,
+            QUrl url, Request* parent = NULL);
+        static Request* FindNodeRequest(int type, QNodeId dest,
+            QNodeId node, Request* parent = NULL);
+        static void RemoveRequest(quint32 id);
+        // PingRequest(dest, parent = 0) : Req (PING, dest, parent)
+        // FindNodeReq(key, dest, par = 0) : FindReq (FIND_NODE, key, dest, par)
+        // FindValueReq(url, dest, par = 0) : FindReq (FIND_VAL, ....)
+        //             (key, dest, par = 0) : ...
+        // StoreReq(key, dest);
+        // Different Completion Procedures
         class Request : public QObject
         {
             Q_OBJECT
@@ -42,16 +58,6 @@ class RequestManager : public QObject
                 static quint32 RandomId();
                 static QList<quint32, Request> get_requests();
                 static Request* Get(quint32 id);
-
-                // TODO: STORE doesn't really need mgmt b/c no verification?
-                // Verify that was downloaded?
-                static Request* PingRequest(int type, QNodeId dest,
-                    Request* parent = NULL);
-                static Request* FindValueRequest(int type, QNodeId dest,
-                    QUrl url, Request* parent = NULL);
-                static Request* FindNodeRequest(int type, QNodeId dest,
-                    QNodeId node, Request* parent = NULL);
-                static void RemoveRequest(quint32 id);
 
                 Request(int type, QNodeId dest, quint32 parent);
                 Request(int type, QNodeId dest, QUrl url, quint32 parent);
@@ -67,7 +73,8 @@ class RequestManager : public QObject
                 void ProcessChildCompletion(Request* child);
 
             signals:
-                void Ready(quint32);
+            //FIXME
+                void Ready(quint32); // FIXME: connect to has_whatever
                 void Complete(quint32);
                 void ChildComplete(quint32);
                 void MissingResource(QUrl);

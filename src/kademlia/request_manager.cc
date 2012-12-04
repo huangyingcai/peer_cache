@@ -10,19 +10,25 @@ static QBitArray RequestManager::Distance(QKey a, QKey b)
      QBitArray b_bits(kKeyLength * 8);
 
      // Convert from QByteArray to QBitArray
-     for (int i = 0; i < kKeyLength; ++i) {
+     for (int i = 0; i < kKeyLength; i++) {
          for (int b = 0; b < 8; ++b) {
-                 a_bits.setBit(i*8 + b, a_bytes.at(i) & (1 << b));
-                 b_bits.setBit(i*8 + b, b_bytes.at(i) & (1 << b));
+                 a_bits.setBit(i * 8 + b, a_bytes.at(i) & (1 << b));
+                 b_bits.setBit(i * 8 + b, b_bytes.at(i) & (1 << b));
          }
      }
 
      return a_bits & b_bits;
 }
 
-RequestManager::RequestManager(QObject* parent = 0) : QObject(parent)
+RequestManager::RequestManager(QNodeId id, QNodeId bootstrap,
+    QObject* parent = 0) : QObject(parent)
 {
-    // TODO: join algorithm
+    node_id_ = id;
+
+    // TODO:Broadcast a join -- just get 1
+    UpdateBucket(Bucket(bootstrap)); // Insert into bucket
+    Request* req = RequestManager::FindNode(id, bootstrap);
+    InitiateRequest(req->get_id());
 }
 
 quint16 RequestManager::Bucket(QKey key)
@@ -62,11 +68,42 @@ void RequestManager::InitiateRequest(quint32 request_id)
     emit HasRequest(Request.Get(request_id));
 }
 
-void RequestManager::ClosestNodes(QKey key, quint16 num);
-void RequestManager::RefreshBucket(quint16 bucket);
+QList<QNode> RequestManager::ClosestNodes(QKey key, quint16 num)
+{
+    QList<QNode> nodes;
+
+    quint16 b = Bucket(key);
+    for (quint b = Bucket(key); b >= 0 && nodes.size() < num; b--) {
+        QList<QNode>::const_iterator i;
+        for (i = buckets_[b].constBegin();
+                i != buckets_[b].constEnd() && nodes.size() < num; i++) {
+            nodes.append(*i);
+        }
+    }
+
+    return nodes;
+}
+
+void RequestManager::RefreshBucket(quint16 bucket)
+{
+    QBitArray bits(kKeySize * 8, 0);
+    for (int b = bucket; b >= 0; b--) {
+        bits[b] = rand() % 2;
+    }
+
+    QNodeId random_node_id;
+    for (int b = 0; b < bits.count(); b++) {
+          random_node_id[b/8] =
+              (random_node_id.at(b / 8) | ((bits[b] ? 1 : 0) << (b % 8)));
+    }
+
+    Request::PingRequest(random_node_id);
+}
+
 void RequestManager::UpdateBucket(quint16 bucket, QNode node);
 {
-  // Start just by adding
+    // TODO: PING procedure
+    buckets_[bucket].append(node);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
