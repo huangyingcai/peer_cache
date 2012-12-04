@@ -9,11 +9,14 @@
 #include <QByteArray>
 #include <QHostAddress>
 #include <QDataStream>
+#include <QAbstractNetworkCache>
+#include <QNetworkManager>
 
 #include <QDebug>
 
 #include <QtCrypto>
 
-#include "peer_cache_constants.hh"
+#include "constants.hh"
+#include "types.hh"
 
 #endif // PEER_CACHE_INCLUDES_HH
