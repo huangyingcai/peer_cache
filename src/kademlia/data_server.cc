@@ -42,7 +42,7 @@ void DataServer::ProcessDownloadRequest()
 {
     QTcpSocket* connection = (QTcpSocket*) QObject::sender();
 
-    if (connection->bytesAvailable() < (int) kKeySize) return;
+    if (connection->bytesAvailable() < (int) kKeyLength) return;
 
     QDataStream in(connection);
     QKey key;

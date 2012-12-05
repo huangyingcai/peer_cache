@@ -1,5 +1,5 @@
-#ifndef PEER_CACHE_DATA_STORE_HH
-#define PEER_CACHE_DATA_STORE_HH
+#ifndef KADEMLIA_DATA_SERVER_HH
+#define KADEMLIA_DATA_SERVER_HH
 
 #include "types.hh"
 #include <QTcpServer>
@@ -59,4 +59,4 @@ class DataServer : public QTcpServer
         // startup
 };
 
-#endif // PEER_CACHE_DATA_STORE_HH
+#endif // KADEMLIA_DATA_SERVER_HH

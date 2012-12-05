@@ -1,5 +1,6 @@
 #include <QApplication>
 
+#include "types.hh"
 #include "includes.hh"
 #include "kademlia_client.hh"
 
@@ -9,8 +10,7 @@ int main(int argc, char** argv)
     QCA::Initializer qcainit; // (QCA::MemoryMode::Practical, blockLength);
 
 
-
-    // KademliaClient* client = new KademliaClient
+   KademliaClient* client = new KademliaClient(qMakePair(QHostAddress(), (quint16)0));
 
     return 0;
 }

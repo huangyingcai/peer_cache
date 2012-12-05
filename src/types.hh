@@ -1,6 +1,10 @@
 #ifndef PEER_CACHE_TYPES_HH
 #define PEER_CACHE_TYPES_HH
 
+#include <QList>
+#include <QPair>
+#include <QHostAddress>
+
 class QByteArray;
 class QFile;
 class QBitArray;

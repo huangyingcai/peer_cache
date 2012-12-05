@@ -1,9 +1,11 @@
-#ifndef PEER_CACHE_KADEMLIA_CLIENT_HH
-#define PEER_CACHE_KADEMLIA_CLIENT_HH
+#ifndef KADEMLIA_CLIENT_HH
+#define KADEMLIA_CLIENT_HH
 
 #include "types.hh"
 #include "data_server.hh"
 #include "request_manager.hh"
+
+#include <QVariantMap>
 
 class QUdpSocket;
 
@@ -15,7 +17,7 @@ class KademliaClient : public DataServer
         static QStringList SerializeNodes(QList<QNode> nodes);
         static QList<QNode> DeserializeNodeStrings(QStringList node_strings);
 
-        KademliaClient(QNode bootstrap_node);
+        KademliaClient(QNodeAddress bootstrap_addr);
 
     protected slots:
         void ReadPendingDatagrams();
@@ -42,7 +44,7 @@ class KademliaClient : public DataServer
     signals:
         void DatagramReady(QNodeAddress, QVariantMap);
         void RequestReady(QNodeAddress, quint32, QVariantMap);
-        void ReplyReady(QNodeAddress, quint32, QKey);
+        void ReplyReady(QNodeAddress, quint32, QVariantMap);
 
         void ResponseReceived(quint32 request_id,
             QNodeList nodes = QNodeList());
@@ -50,8 +52,9 @@ class KademliaClient : public DataServer
     protected:
         const static quint16 kDefaultPort = 42600;
 
+        QNodeId node_id_;
         QUdpSocket* udp_socket_;
         RequestManager* request_manager_;
 };
 
-#endif // PEER_CACHE_KADEMLIA_CLIENT_HH
+#endif // KADEMLIA_CLIENT_HH

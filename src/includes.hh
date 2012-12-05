@@ -2,11 +2,14 @@
 #define PEER_CACHE_INCLUDES_HH
 
 #include <QList>
+#include <QPair>
 #include <QMap>
 #include <QVariant>
+#include <QBitArray>
 #include <QByteArray>
 #include <QHostAddress>
 #include <QDataStream>
+#include <QUdpSocket>
 #include <QTcpSocket>
 #include <QFile>
 
