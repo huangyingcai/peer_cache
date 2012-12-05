@@ -1,16 +1,13 @@
 #ifndef PEER_CACHE_KADEMLIA_CLIENT_HH
 #define PEER_CACHE_KADEMLIA_CLIENT_HH
 
-class QVariantMap;
-class QNodeAddress;
-class QByteArray;
-class QKey;
-class QNodeId;
-class DataServer;
+#include "types.hh"
+#include "data_server.hh"
+#include "request_manager.hh"
 
-// #include "data_server.hh"
+class QUdpSocket;
 
-public KademliaClient : public DataServer
+class KademliaClient : public DataServer
 {
     Q_OBJECT
 
@@ -25,19 +22,22 @@ public KademliaClient : public DataServer
         void ProcessDatagram(QNodeAddress addr, QVariantMap message);
         void SendDatagram(QNodeAddress dest, QVariantMap& message);;
 
-        void ProcessNewRequest(int type, quint32 request_id, QNode dest, QKey key);
-        void SendRequest(QNodeAddress dest, quint32 request_id, QVariantMap message);
+        void ProcessNewRequest(int type, quint32 request_id, QNode dest,
+            QKey key);
+        void SendRequest(QNodeAddress dest, quint32 request_id,
+            QVariantMap message);
         void SendPing(QNodeAddress dest, quint32 request_id);
         void SendStore(QNodeAddress dest, quint32 request_id, QKey key);
         void SendFindNode(QNodeAddress dest, quint32 request_id, QNodeId id);
         void SendFindValue(QNodeAddress dest, quint32 request_id, QKey key);
 
-        void SendReply(QNodeAddress dest, quint32 request_id, QVariantMap message)
-        void ReplyPing(QNodeAddress dest, quint32 request_id)
+        void SendReply(QNodeAddress dest, quint32 request_id,
+            QVariantMap message);
+        void ReplyPing(QNodeAddress dest, quint32 request_id);
         // NOTE: ReplyDownload does not exist. Downloads (i.e. replies to store) are
         // handled by the data manager.
-        void ReplyFindNode(QNodeAddress dest, quint32 request_id, QNodeId id)
-        void ReplyFindValue(QNodeAddress dest, quint32 request_id, QKey key)
+        void ReplyFindNode(QNodeAddress dest, quint32 request_id, QNodeId id);
+        void ReplyFindValue(QNodeAddress dest, quint32 request_id, QKey key);
 
     signals:
         void DatagramReady(QNodeAddress, QVariantMap);
@@ -45,7 +45,7 @@ public KademliaClient : public DataServer
         void ReplyReady(QNodeAddress, quint32, QKey);
 
         void ResponseReceived(quint32 request_id,
-            QList<QNode> nodes = QList<QNode>());
+            QNodeList nodes = QNodeList());
 
     protected:
         const static quint16 kDefaultPort = 42600;

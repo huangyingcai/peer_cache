@@ -1,9 +1,8 @@
 #ifndef PEER_CACHE_REQUEST_MANAGER_HH
 #define PEER_CACHE_REQUEST_MANAGER_HH
 
-class QBitArray;
-class QList;
-class QNode;
+#include "types.hh"
+#include "constants.hh"
 
 class RequestManager : public QObject
 {
@@ -28,7 +27,7 @@ class RequestManager : public QObject
 
     private:
         QNodeId node_id_;
-        QList<QNode>[160] buckets_;
+        QVector<QNodeList*> buckets_;
 
         QList<QNode> ClosestNodes(QKey key, quint16 num = kBucketSize);
         void RefreshBucket(quint16 bucket);
@@ -51,7 +50,6 @@ class RequestManager : public QObject
                 static quint32 FindValueRequest(QNode dest, QKey key,
                     QObject* observer, Request* parent = NULL);
 
-                static QList<quint32, Request> get_requests();
                 static quint32 RandomId();
                 static Request* Get(quint32 id);
 
@@ -63,7 +61,7 @@ class RequestManager : public QObject
                 quint32 get_id() { return id_; };
 
                 void AddChild(quint32 id);
-                virtual void UpdateResults(QList<QNode> results = QList()); 
+                virtual void UpdateResults(QNodeList results = QNodeList()); 
 
             signals:
                 void Ready(Request*);
@@ -74,7 +72,7 @@ class RequestManager : public QObject
 
                 quint32 id_;
                 int type_;
-                QNode destination_
+                QNode destination_;
                 Request* parent_;
                 QObject* observer_;
                 QList<quint32> children_;
@@ -92,7 +90,7 @@ class RequestManager : public QObject
             public:
                 StoreRequest(QNode dest, QKey key, QObject* observer,
                     quint32 parent = 0);
-                StoreRequest(const PingRequest& other);
+                StoreRequest(const StoreRequest& other);
 
             private:
                 QKey resource_key_;
@@ -111,7 +109,7 @@ class RequestManager : public QObject
 
             private:
                 QKey requested_key_;
-                QList<QNode> results_;
+                QNodeList results_;
         };
 
         class FindNodeRequest : public FindRequest

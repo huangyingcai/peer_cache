@@ -1,5 +1,4 @@
 #include "includes.hh"
-
 #include "request_manager.hh"
 
 static QBitArray RequestManager::Distance(QKey a, QKey b)
@@ -23,6 +22,9 @@ RequestManager::RequestManager(QNodeId id, QNode bootstrap_node,
     QObject* parent = 0) : QObject(parent)
 {
     node_id_ = id;
+    for (int i = 0; i < 160; i++) {
+        buckets_[i] = new QNodeList;
+    }
 
     UpdateBucket(bootstrap_node);
     Request* req = RequestManager::FindNode(id, bootstrap);
@@ -101,8 +103,8 @@ QList<QNode> RequestManager::ClosestNodes(QKey key, quint16 num)
     quint16 b = Bucket(key);
     for (quint b = Bucket(key); b >= 0 && nodes.size() < num; b--) {
         QList<QNode>::const_iterator i;
-        for (i = buckets_[b].constBegin();
-                i != buckets_[b].constEnd() && nodes.size() < num; i++) {
+        for (i = buckets_[b]->constBegin();
+                i != buckets_[b]->constEnd() && nodes.size() < num; i++) {
             nodes.append(*i);
         }
     }
@@ -137,10 +139,10 @@ void RequestManager::UpdateBuckets(QNode node);
     // TODO: PING procedure
     quint16 b = Bucket(node.first);
 
-    int i = buckets_[b].indexOf(node);
-    if (i > 0) buckets_[b].removeAt(i);
+    int i = buckets_[b]->indexOf(node);
+    if (i > 0) buckets_[b]->removeAt(i);
 
-    buckets_[b].append(node);
+    buckets_[b]->append(node);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -154,11 +156,6 @@ static quint32 RequestManager::Request::RandomId()
         initialized = true;
     }
     return qrand();
-}
-
-static QList<quint32, Request> RequestManager::Request::get_requests()
-{
-    return requests_;
 }
 
 static void RegisterRequest(quint32 id, const Request* req)

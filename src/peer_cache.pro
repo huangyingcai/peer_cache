@@ -10,12 +10,11 @@ QT += network
 CONFIG += crypto
 
 # Input
-HEADERS += main.hh
-HEADERS += data_server.hh
-HEADERS += kademlia_client.hh
-HEADERS += resource_manager.hh
+HEADERS += kademlia/data_server.hh
+HEADERS += kademlia/kademlia_client.hh
+HEADERS += kademlia/request_manager.hh
 
 SOURCES += main.cc
-SOURCES += data_server.cc
-SOURCES += kademlia_client.cc
-SOURCES += resource_manager.cc
+SOURCES += kademlia/data_server.cc
+SOURCES += kademlia/kademlia_client.cc
+SOURCES += kademlia/request_manager.cc

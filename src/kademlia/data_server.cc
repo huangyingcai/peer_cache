@@ -1,3 +1,4 @@
+#include "constants.hh"
 #include "includes.hh"
 #include "data_server.hh"
 
@@ -18,7 +19,7 @@ void DataServer::Store(QKey key, QFile* file)
     files_.insert(key, file);
 }
 
-QFile* Value(QKey key)
+QFile* DataServer::Value(QKey key)
 {
     return files_.value(key, NULL);
 }
@@ -26,17 +27,18 @@ QFile* Value(QKey key)
 ////////////////////////////////////////////////////////////////////////////////
 // Data Transmission (TCP)
 
-void AcceptIncomingConnection()
+void DataServer::AcceptIncomingConnection()
 {
     QTcpSocket* connection = nextPendingConnection();
     connect(connection, SIGNAL(disconnected()), connection,
         SLOT(deleteLater()));
-    connect(onnection, SIGNAL(readyRead()), this, ProcessDownloadRequest());
+    connect(connection, SIGNAL(readyRead()), this,
+        SLOT(ProcessDownloadRequest()));
 }
 
 // Sending a file
 
-void ProcessDownloadRequest()
+void DataServer::ProcessDownloadRequest()
 {
     QTcpSocket* connection = (QTcpSocket*) QObject::sender();
 
@@ -54,19 +56,19 @@ void ProcessDownloadRequest()
 
     // TODO: Async write
     char buffer[kBufferSize];
-    quint64 bytes_read = 0;
+    qint64 bytes_read = 0;
     while ((bytes_read = upload->read(buffer, kBufferSize)) > 0) {
         out.writeBytes(buffer, bytes_read);
     }
     if (bytes_read < 0) ERROR("Error reading file");
     upload->seek(0); // Reset to head of file
 
-    m_connection->close();
+    connection->close();
 }
 
 // Receiving a file
 
-void InitiateDownload(QHostAddress addr, quint32 request_id, QKey key)
+void DataServer::InitiateDownload(QNodeAddress addr, quint32 request_id, QKey key)
 {
     // TODO: Eventually check request_id
 
@@ -77,7 +79,7 @@ void InitiateDownload(QHostAddress addr, quint32 request_id, QKey key)
     pending_downloads_->insert(connection, key);
 }
 
-void RequestDownload()
+void DataServer::RequestDownload()
 {
     QTcpSocket* connection = (QTcpSocket*) QObject::sender();
     connect(connection, SIGNAL(disconnected()), connection, SLOT(deleteLater()));
@@ -95,12 +97,12 @@ void RequestDownload()
     connection->write(block);
 }
 
-void ProcessDownload()
+void DataServer::ProcessDownload()
 {
     QTcpSocket* connection = (QTcpSocket*) QObject::sender();
     Download download = in_progress_downloads_->value(connection);
 
-    QDataStream in(m_connection);
+    QDataStream in(connection);
     if (download.get_size() == 0) {
         if (connection->bytesAvailable() < (int) sizeof(quint32)) return;
         quint64 s;
@@ -109,16 +111,17 @@ void ProcessDownload()
     }
 
     char buffer[kBufferSize];
-    while (connection->bytesAvailable() && !download.complete()) {
-        quint64 bytes_read = connection->readData(buffer, kBufferSize);
+    while (connection->bytesAvailable() && !download.Complete()) {
+        quint64 bytes_read = connection->read(buffer, kBufferSize);
         download.Write(buffer, bytes_read);
     }
 
-    if (download.complete()) {
+    if (download.Complete()) {
         if (download.get_bytes_read() == download.get_size()) {
-            Store(download.key, download.file);
+            Store(download.get_key(), download.get_file());
         }
         in_progress_downloads_->remove(connection);
+        connection->close();
     } else {
         in_progress_downloads_->insert(connection, download);
     }
@@ -127,27 +130,24 @@ void ProcessDownload()
 ///////////////////////////////////////////////////////////////////////////////
 // Download
 
-Download::Download(QKey key)
+DataServer::Download::Download() {}
+
+DataServer::Download::Download(QKey key) : size_(0), bytes_read_(0)
 {
     key_ = key;
-    file_ = new File(QString(key.constData())); // TODO: error handling
-    file_.open(QIODevice::ReadWrite)
-    size_ = 0;
-    bytes_read_ = 0;
+    file_ = new QFile(QString(key.constData())); // TODO: error handling
+    file_->open(QIODevice::ReadWrite);
 }
 
-Download::Download(const Download& other)
+DataServer::Download::Download(const Download& other)
 {
     key_ = other.key_;
     file_ = other.file_;
     size_ = other.size_;
-    bytes_read = other.bytes_read_;
+    bytes_read_ = other.bytes_read_;
 }
 
 void DataServer::Download::Write(char* buff, quint64 num_bytes)
 {
-    file_->writeData(buff, num_bytes);
+    file_->write(buff, num_bytes);
 }
-
-
-// QNetworkAccessManager

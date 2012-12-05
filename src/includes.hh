@@ -7,12 +7,13 @@
 #include <QByteArray>
 #include <QHostAddress>
 #include <QDataStream>
+#include <QTcpSocket>
+#include <QFile>
 
 #include <QDebug>
 
 #include <QtCrypto>
 
-#include "constants.hh"
-#include "types.hh"
+#define ERROR(X) qDebug() << X;
 
 #endif // PEER_CACHE_INCLUDES_HH

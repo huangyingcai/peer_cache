@@ -1,7 +1,5 @@
 #include "includes.hh"
 #include "kademlia_client.hh"
-#include "data_server.hh"
-#include "request_manager.hh"
 
 static QStringList KademliaClient::SerializeNodes(QList<QNode> nodes)
 {
