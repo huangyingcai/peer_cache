@@ -16,10 +16,10 @@ class RequestManager : public QObject
         quint16 Bucket(QKey key);
 
     public slots:
-        void UpdateRequest(quint32 request_id, QNodeAddress addr,
+        void InitiateRequest(quint32 request_id);
+        void UpdateRequest(quint32 request_id, QNode node,
             QList<QNode> results);
         void CloseRequest(quint32 request_id);
-        void InitiateRequest(quint32 request_id);
 
         void IssueStore(QKey key); // TODO: get rid of this
 
@@ -32,7 +32,7 @@ class RequestManager : public QObject
 
         QList<QNode> ClosestNodes(QKey key, quint16 num = kBucketSize);
         void RefreshBucket(quint16 bucket);
-        void UpdateBucket(quint16 bucket, QNode node);
+        void UpdateBuckets(QNode node);
 
         class Request : public QObject
         {
@@ -41,10 +41,11 @@ class RequestManager : public QObject
             public:
                 static void RegisterRequest(quint32 id, const Request* req);
                 static void RemoveRequest(quint32 id);
+
                 // Factory Methods -- TODO - this is sloppy
                 static quint32 PingRequest(QNode dest, QObject* observer,
                     Request* parent = NULL);
-                // static quint32 StoreRequest() TODO - timer, etc
+                static quint32 StoreRequest();
                 static quint32 FindNodeRequest(QNode dest, QNodeId id,
                     QObject* observer, Request* parent = NULL);
                 static quint32 FindValueRequest(QNode dest, QUrl url,
@@ -59,7 +60,7 @@ class RequestManager : public QObject
                 Request(const Request& other);
                 void Init();
 
-                quint32 get_id { return id_; };
+                quint32 get_id() { return id_; };
 
                 void AddChild(quint32 id);
                 virtual void UpdateResults(QList<QNode> results = QList()); 
@@ -89,10 +90,12 @@ class RequestManager : public QObject
         class StoreRequest : public Request
         {
             public:
-              //FIXME
                 StoreRequest(QNode dest, QKey key, QObject* observer,
                     quint32 parent = 0);
                 StoreRequest(const PingRequest& other);
+
+            private:
+                QKey resource_key_;
         };
 
         class FindRequest : public Request

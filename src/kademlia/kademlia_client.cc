@@ -3,6 +3,39 @@
 #include "data_manager.hh"
 #include "request_manager.hh"
 
+static QStringList KademliaClient::SerializeNodes(QList<QNode> nodes)
+{
+    QStringList node_strings;
+
+    QList<QNode>::const_iterator i;
+    for (i = nodes.constBegin(); i != nodes.constEnd(); i++) {
+        QNodeId id = i->first;
+        QHostAddress addr = i->second.first;
+        quint16 port = i->second.second;
+        node_strings << QString("%1%2:%3").arg(
+            id.constData()).arg(addr.toString()).arg(port);
+    }
+
+    return node_strings;
+}
+
+static QList<QNode> KademliaClient::DeserializeNodeStrings(
+    QStringList node_strings)
+{
+    QList<QNode> nodes;
+
+    QStringList::const_iterator i;
+    for (i = node_strings.constBegin(); i != node_strings.constEnd();
+            i++) {
+        QNodeId id = QByteArray(i->mid(0, kKeyLength));
+        QStringList remaining = i->mid(kKeyLength).split(":");
+        QHostAddress addr = QHostAddress(remaining[0]);
+        quint16 port = (quint16) remaining[1].toUInt();
+        nodes << qMakePair(id, qMakePair(addr, port));
+    }
+
+}
+
 KademliaClient::KademliaClient(QNode bootstrap_node)
 {
     qsrand(time(NULL));
@@ -18,29 +51,22 @@ KademliaClient::KademliaClient(QNode bootstrap_node)
     connect(this, SIGNAL(ResponseReceived(quint32, QList<QNode>)),
         request_manager_, SLOT(UpdateRequest(quint32, QList<QNode>)),
         Qt::QueuedConnection);
-    connect(this, SIGNAL(ValueFound(quint32)), request_manager_,
-        SLOT(CloseRequest(quint32)), Qt::QueuedConnection); // FIXME: hack for now
     // Issue new requests
     connect(request_manager_, SIGNAL(HasRequest(int, quint32, QNode, QKey)),
         SLOT(ProcessNewRequest(int, quint32, QNode, QKey)),
         Qt::QueuedConnection);
 
     data_store_ = new DataStore(this);
-    connect(this, SIGNAL(StoreReceived(QNodeAddress, quint32, QKey)),
-        data_store_, SLOT(InitiateDownload(QNodeAddress, quint32, QKey)),
-        Qt::QueuedConnection);
-    connect(this, SIGNAL(ValueFound(QNodeAddress, quint32, QKey)),
-        data_store_, SLOT(InitiateDownload(QNodeAddress, quint32, QKey)),
-        Qt::QueuedConnection);
-    connect(data_store_, SIGNAL(GetComplete(QKey)), request_manager_,
-        SLOT(IssueStore(QKey)); // FIXME: also a Hack
+    // connect(data_store_, SIGNAL(GetComplete(QKey)), request_manager_,
+      //   SLOT(IssueStore(QKey)); // FIXME: also a Hack
 
     // Connect remaining signals and slots to implement asynch server
     connect(this, SIGNAL(DatagramReady(QNodeAddress, QVariantMap)),
         this, SLOT(ProcessDatagram(QNodeAddress, QVariantMap)),
         Qt::QueuedConnection);
-    connect(this, SIGNAL(RequestReady(QNodeAddress, QVariantMap)), this,
-        SLOT(SendRequest(QNodeAddress, QVariantMap)), Qt::QueuedConnection);
+    connect(this, SIGNAL(RequestReady(QNodeAddress, quint32, QVariantMap)),
+        this, SLOT(SendRequest(QNodeAddress, quint32, QVariantMap)),
+        Qt::QueuedConnection);
     connect(this, SIGNAL(ReplyReady(QNodeAddress, quint32, QVariantMap)), this,
         SLOT(SendReply(QNodeAddress, quint32, QVariantMap)),
         Qt::QueuedConnection);
@@ -73,7 +99,6 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
 {
     // TODO: Was Node intended destination??
 
-    // Update K-Buckets
     QNodeId source_id = message.value("Source").toString();
     if (!source_id) {
         ERROR("Invalid Source in request");
@@ -99,7 +124,7 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
         case STORE:
             QKey key = message.value("Key").toByteArray();
             if (!key.isEmpty()) {
-                emit StoreReceived(node, request_id, key);
+                data_store_->InitiateDownload(addr, request_id, key);
             } else {
                 ERROR("Improper STORE: no key");
             }
@@ -114,11 +139,13 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
             break;
         case REPLY_VALUE:
             QKey key = message.value("Key").toByteArray();
-            QList<QVariant> nodes = message.value("Nodes").toList();
+            QStringList node_list = message.value("Nodes").toStringList();
             if (!key.isEmpty()) {
-                emit ValueFound(request_id);
+                data_store_->InitiateDownload(addr, request_id, key);
+                request_manager_->CloseRequest(request_id); // FIXME:
             } else if (!nodes.isEmpty()) {
-                // FIXME: convert to QNode
+                QList<QNode> nodes =
+                    KademliaClient.DeserializeNodeStrings(node_list);
                 emit ResponseReceived(request_id, nodes);
             } else {
                 ERROR("Improper REPLY_VALUE");
@@ -178,7 +205,8 @@ void ProcessNewRequest(int type, quint32 request_id, QNode dest, QKey key)
     }
 }
 
-void KademliaClient::SendRequest(QNodeAddress dest, QVariantMap message)
+void KademliaClient::SendRequest(QNodeAddress dest, quint32 request_id,
+    QVariantMap message)
 {
     // Insert standard message keys
     message.insert("Source", kNodeId);
@@ -188,40 +216,41 @@ void KademliaClient::SendRequest(QNodeAddress dest, QVariantMap message)
     SendDatagram(dest, message);
 }
 
-void KademliaClient::SendPing(QNodeAddress dest)
+void KademliaClient::SendPing(QNodeAddress dest, quint32 request_id)
 {
     QVariantMap message;
     message.insert("Type", PING);
 
-    emit RequestReady(dest, message);
+    emit RequestReady(dest, request_id, message);
 }
 
-void KademliaClient::SendStore(QNodeAddress dest, QKey key, QByteArray sha)
+void KademliaClient::SendStore(QNodeAddress dest, quint32 request_id, QKey key)
 {
     QVariantMap message;
     message.insert("Type", STORE);
     message.insert("Store", key);
-    message.insert("Hash", sha);
 
-    emit RequestReady(dest, message);
+    emit RequestReady(dest, request_id, message);
 }
 
-void KademliaClient::SendFindNode(QNodeAddress dest, QNodeId id)
+void KademliaClient::SendFindNode(QNodeAddress dest, quint32 request_id,
+    QNodeId id)
 {
     QVariantMap message;
     message.insert("Type", FIND_NODE);
     message.insert("Find Node", id);
 
-    emit RequestReady(dest, message);
+    emit RequestReady(dest, request_id, message);
 }
 
-void KademliaClient::SendFindValue(QNodeAddress dest, QKey key)
+void KademliaClient::SendFindValue(QNodeAddress dest, quint32 request_id,
+    QKey key)
 {
     QVariantMap message;
     message.insert("Type", FIND_VALUE);
     message.insert("Key", key);
 
-    emit RequestReady(dest, message);
+    emit RequestReady(dest, request_id, message);
 }
 
 // Sending outgoing reply packets
@@ -241,7 +270,7 @@ void KademliaClient::ReplyPing(QNodeAddress dest, quint32 request_id)
     QVariantMap message;
     message.insert("Type", ACK);
 
-    emit ReplyReady(dest, message);
+    emit ReplyReady(dest, request_id, message);
 }
 
 void KademliaClient::ReplyFindNode(QNodeAddress dest, quint32 request_id,
@@ -264,12 +293,13 @@ void KademliaClient::ReplyFindValue(QNodeAddress dest, quint32 request_id,
 
     // If have cached resource, reply with port open for download, otherwise
     // reply with the closest k nodes to the requested key
-    if (data_manager_->HasValue(key)) {
+    if (data_store_->HasValue(key)) {
         message.insert("Key", key);
     } else {
-        QList<QNodeAddress> nodes = m_request_manager->NodesFor(key);
-        message.insert("Nodes", nodes);
+        QList<QNode> nodes = request_manager_->ClosestNodes(key);
+        message.insert("Nodes", KademliaClient.SerializeNodes(nodes));
     }
 
     emit ReplyReady(dest, request_id, message);
 }
+

@@ -13,10 +13,10 @@ public KademliaClient : public QObject
     Q_OBJECT
 
     public:
-        KademliaClient();
+        static QStringList SerializeNodes(QList<QNode> nodes);
+        static QList<QNode> DeserializeNodeStrings(QStringList node_strings);
 
-    public slots:
-
+        KademliaClient(QNode bootstrap_node);
 
     protected slots:
         void ReadPendingDatagrams();
@@ -39,12 +39,11 @@ public KademliaClient : public QObject
 
     signals:
         void DatagramReady(QNodeAddress, QVariantMap);
-        void RequestReady(QNodeAddress, QVariantMap);
+        void RequestReady(QNodeAddress, quint32, QVariantMap);
         void ReplyReady(QNodeAddress, quint32, QKey);
 
         void ResponseReceived(quint32 request_id,
             QList<QNode> nodes = QList<QNode>());
-        void ValueFound(QNodeAddress, quint32, QKey);
 
     protected:
         const static quint16 kDefaultPort = 42600;

@@ -20,13 +20,12 @@ static QBitArray RequestManager::Distance(QKey a, QKey b)
      return a_bits & b_bits;
 }
 
-RequestManager::RequestManager(QNodeId id, QNode bootstrap,
+RequestManager::RequestManager(QNodeId id, QNode bootstrap_node,
     QObject* parent = 0) : QObject(parent)
 {
     node_id_ = id;
 
-    // TODO:Broadcast a join -- just get 1
-    UpdateBucket(Bucket(bootstrap.first), bootstrap); // Insert into bucket
+    UpdateBucket(bootstrap_node);
     Request* req = RequestManager::FindNode(id, bootstrap);
 }
 
@@ -40,10 +39,14 @@ quint16 RequestManager::Bucket(QKey key)
     return bucket;
 }
 
-void RequestManager::UpdateRequest(quint32 request_id, QNodeAddress addr,
+void RequestManager::UpdateRequest(quint32 request_id, QNode node,
     QList<QNode> results);
 {
-  // FIXME::
+    QList<QNode>::const_iterator i;
+    for (i = results.constBegin(); i != results.constEnd(); i++) {
+        UpdateBuckets(*i);
+    }
+
     Request* req;
     if (req = Request.Get(request_id)) {
         req->UpdateResults(results); // Works for PING
@@ -130,10 +133,15 @@ void RequestManager::RefreshBucket(quint16 bucket)
 //     Request::PingRequest(random_node_id);
 }
 
-void RequestManager::UpdateBucket(quint16 bucket, QNode node);
+void RequestManager::UpdateBuckets(QNode node);
 {
     // TODO: PING procedure
-    buckets_[bucket].append(node);
+    quint16 b = Bucket(node.first);
+
+    int i = buckets_[b].indexOf(node);
+    if (i > 0) buckets_[b].removeAt(i);
+
+    buckets_[b].append(node);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -156,7 +164,9 @@ static QList<quint32, Request> RequestManager::Request::get_requests()
 
 static void RegisterRequest(quint32 id, const Request* req)
 {
-    requests_.insert(id, *req); // Add to list of all requests
+    if (req->get_type() != STORE) {
+        requests_.insert(id, *req); // Add to list of all requests
+    }
 }
 
 static void RequestManager::Request::RemoveRequest(quint32 id)
@@ -238,7 +248,7 @@ virtual void UpdateResults(QList<QNode> results = QList())
     emit Complete(id_);
 }
 
-// Ping Request
+// PingRequest
 
 // FIXME: interface for RequestManager?  or Request Observer??? -- signals, etc
 RequestManager::PingRequest::PingRequest(QNode dest, QObject* observer,
@@ -249,7 +259,20 @@ RequestManager::PingRequest::PingRequest(const PingRequest& other) :
 
 // StoreRequest
 
-// Find Request
+RequestManager::StoreRequest::StoreRequest(QNode dest, QKey key,
+    QObject* observer, Request* parent = NULL) :
+    Request(STORE, dest, observer, parent)
+{
+    resource_key_ = key;
+}
+
+RequestManager::StoreRequest::StoreRequest(const PingRequest& other) :
+    Request(other)
+{
+    resource_key_ = other.resource_key_;
+}
+
+// FindRequest
 
 RequestManager::FindRequest::FindRequest(int type, QNode dest, QKey key,
     QObject* observer, Request* parent = NULL) :
