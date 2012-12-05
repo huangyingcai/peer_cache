@@ -59,23 +59,19 @@ KademliaClient::KademliaClient(QNodeAddress bootstrap_addr)
     request_manager_ = new RequestManager(node_id_, bootstrap_addr, this);
     // Handle existing requests
     connect(this, SIGNAL(ResponseReceived(quint32, QNodeList)),
-        request_manager_, SLOT(UpdateRequest(quint32, QNodeList)),
-        Qt::QueuedConnection);
+        request_manager_, SLOT(UpdateRequest(quint32, QNodeList)));
     // Issue new requests
     connect(request_manager_, SIGNAL(HasRequest(int, quint32, QNode, QKey)),
-        SLOT(ProcessNewRequest(int, quint32, QNode, QKey)),
-        Qt::QueuedConnection);
+        SLOT(ProcessNewRequest(int, quint32, QNode, QKey)));
 
     // Connect remaining signals and slots to implement asynch server
+    // TODO: Qt::Queued Connection
     connect(this, SIGNAL(DatagramReady(QNodeAddress, QVariantMap)),
-        this, SLOT(ProcessDatagram(QNodeAddress, QVariantMap)),
-        Qt::QueuedConnection);
+        this, SLOT(ProcessDatagram(QNodeAddress, QVariantMap)));
     connect(this, SIGNAL(RequestReady(QNodeAddress, quint32, QVariantMap)),
-        this, SLOT(SendRequest(QNodeAddress, quint32, QVariantMap)),
-        Qt::QueuedConnection);
+        this, SLOT(SendRequest(QNodeAddress, quint32, QVariantMap)));
     connect(this, SIGNAL(ReplyReady(QNodeAddress, quint32, QVariantMap)), this,
-        SLOT(SendReply(QNodeAddress, quint32, QVariantMap)),
-        Qt::QueuedConnection);
+        SLOT(SendReply(QNodeAddress, quint32, QVariantMap)));
 }
 
 void KademliaClient::ReadPendingDatagrams()
