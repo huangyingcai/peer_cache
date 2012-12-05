@@ -6,9 +6,11 @@ class QNodeAddress;
 class QByteArray;
 class QKey;
 class QNodeId;
-class DataManager;
+class DataServer;
 
-public KademliaClient : public QObject
+// #include "data_server.hh"
+
+public KademliaClient : public DataServer
 {
     Q_OBJECT
 
@@ -49,7 +51,6 @@ public KademliaClient : public QObject
         const static quint16 kDefaultPort = 42600;
 
         QUdpSocket* udp_socket_;
-        DataStore* data_store_;
         RequestManager* request_manager_;
 };
 

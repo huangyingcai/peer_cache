@@ -48,7 +48,7 @@ class RequestManager : public QObject
                 static quint32 StoreRequest();
                 static quint32 FindNodeRequest(QNode dest, QNodeId id,
                     QObject* observer, Request* parent = NULL);
-                static quint32 FindValueRequest(QNode dest, QUrl url,
+                static quint32 FindValueRequest(QNode dest, QKey key,
                     QObject* observer, Request* parent = NULL);
 
                 static QList<quint32, Request> get_requests();
@@ -124,19 +124,14 @@ class RequestManager : public QObject
         class FindValueRequest : public FindRequest
         {
             public:
-                FindValueRequest(QNode dest, QUrl url, QObject* observer,
-                    quint32 parent = 0);
-                FindValueRequest(QNode dest, QUrl url, QKey key, QObject* observer,
+                FindValueRequest(QNode dest, QKey key, QObject* observer,
                     quint32 parent = 0);
                 FindValueRequest(const FindValueRequest& other);
 
                 virtual void UpdateResults(QList<QNode> results);
 
             signals:
-                void ResourceNotFound(QUrl);
-
-            private:
-                QUrl requested_url_;
+                void ResourceNotFound(QKey);
         };
 };
 

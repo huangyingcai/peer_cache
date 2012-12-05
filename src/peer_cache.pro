@@ -4,16 +4,18 @@
 
 TEMPLATE = app
 TARGET =
-DEPENDPATH += .
-INCLUDEPATH += .
+DEPENDPATH +=
+INCLUDEPATH += kademlia
 QT += network
 CONFIG += crypto
 
 # Input
 HEADERS += main.hh
-HEADERS += server.hh
+HEADERS += data_server.hh
+HEADERS += kademlia_client.hh
 HEADERS += resource_manager.hh
 
 SOURCES += main.cc
-SOURCES += server.cc
+SOURCES += data_server.cc
+SOURCES += kademlia_client.cc
 SOURCES += resource_manager.cc

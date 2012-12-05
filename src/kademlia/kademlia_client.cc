@@ -1,6 +1,6 @@
 #include "includes.hh"
 #include "kademlia_client.hh"
-#include "data_manager.hh"
+#include "data_server.hh"
 #include "request_manager.hh"
 
 static QStringList KademliaClient::SerializeNodes(QList<QNode> nodes)
@@ -42,7 +42,10 @@ KademliaClient::KademliaClient(QNode bootstrap_node)
     kNodeId = (quint32) qrand();
 
     udp_socket_ = new QUdpSocket(this);
-    udp_socket_.bind(QHostAddress::LocalHost, kDefaultPort);
+    quint16 p = kDefaultPort;
+    while (!udp_socket_->bind(p++));
+    qDebug() << "Bound to port " << p - 1;
+    // udp_socket_.bind(QHostAddress::LocalHost, kDefaultPort);
     connect(udp_socket_, SIGNAL(readyRead()), this,
         SLOT(ReadPendingDatagrams()));
 
@@ -55,10 +58,6 @@ KademliaClient::KademliaClient(QNode bootstrap_node)
     connect(request_manager_, SIGNAL(HasRequest(int, quint32, QNode, QKey)),
         SLOT(ProcessNewRequest(int, quint32, QNode, QKey)),
         Qt::QueuedConnection);
-
-    data_store_ = new DataStore(this);
-    // connect(data_store_, SIGNAL(GetComplete(QKey)), request_manager_,
-      //   SLOT(IssueStore(QKey)); // FIXME: also a Hack
 
     // Connect remaining signals and slots to implement asynch server
     connect(this, SIGNAL(DatagramReady(QNodeAddress, QVariantMap)),

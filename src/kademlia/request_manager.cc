@@ -1,4 +1,3 @@
-#include "constants.hh"
 #include "includes.hh"
 
 #include "request_manager.hh"
@@ -190,10 +189,10 @@ static quint32 RequestManager::FindNodeRequest(QNode dest, QNodeId id,
     return new_request.get_id();
 }
 
-static quint32 RequestManager::FindValueRequest(QNode dest, QUrl url,
+static quint32 RequestManager::FindValueRequest(QNode dest, QKey key,
     QObject* observer, Request* parent = NULL)
 {
-    FindValueRequest new_request(dest, url, observer,
+    FindValueRequest new_request(dest, key, observer,
         (parent ? parent->id_ : 0));
     return new_request.get_id();
 }
@@ -302,7 +301,8 @@ virtual void RequestManager::FindRequest::UpdateResults(QList<QNode> results)
             QNode cur_node = results.takeFirst();
             QList<QNode>::const_iterator i;
             for (i = sorted.constBegin(); i != sorted.constEnd(); i++) {
-                quint16 cur_dist = RequestManager.Distance(cur_node.first, requested_key_);
+                quint16 cur_dist = RequestManager.Distance(cur_node.first,
+                    requested_key_);
                 quint16 dist = RequestManager.Distance(*i, requested_key_);
                 if (cur_dist > dist) break;
             }
@@ -350,7 +350,7 @@ void MakeChild(QNode dest)
       if (type_ == FIND_NODE) {
           Request.FindNodeRequest(dest, requested_key_, observer_, this);
       } else { // FIND_VALUE
-          Request.FindValueRequest(dest, requested_url_, observer_, this);
+          Request.FindValueRequest(dest, requested_key_, observer_, this);
       }
 }
 
@@ -362,39 +362,25 @@ RequestManager::FindNodeRequest::FindNodeRequest(QNode dest, QKey key,
 
 // Find Value Request
 
-RequestManager::FindValueRequest::FindValueRequest(QNode dest, QUrl url,
+RequestManager::FindValueRequest::FindValueRequest(QNode dest, QKey key,
     QObject* observer, Request* parent = 0) :
-    FindRequest(FIND_VALUE, dest, QByteArray(), observer, parent)
-{
-    requested_url_ = url;
-    requested_key_ =
-        QCA::Hash("sha1").hash(QByteArray(url.toEncoded())).toByteArray();
-    connect(&new_request, SIGNAL(ResourceNotFound(QUrl)), observer,
-        SLOT(GetResource(QUrl)), Qt::QueuedConnection);
-}
-
-RequestManager::FindValueRequest::FindValueRequest(QNode dest, QUrl url,
-    QKey key, QObject* observer, Request* parent = 0) :
     FindRequest(FIND_VALUE, dest, key, observer, parent)
 {
-    requested_url_ = url;
-    requested_key_ = key;
-    connect(&new_request, SIGNAL(ResourceNotFound(QUrl)), observer,
-        SLOT(GetResource(QUrl)), Qt::QueuedConnection);
+    // TODO: connect(&new_request, SIGNAL(ResourceNotFound(QKey)), observer,
+      //  SLOT(GetResource(QKey)), Qt::QueuedConnection);
 }
 
 RequestManager::FindValueRequest::FindValueRequest(
     const FindValueRequest& other) : FindRequest(other)
 {
-    requested_url_ = url;
-    connect(&new_request, SIGNAL(ResourceNotFound(QUrl)), observer,
-        SLOT(GetResource(QUrl)), Qt::QueuedConnection);
+    // TODO: connect(&new_request, SIGNAL(ResourceNotFound(QKey)), observer,
+        // SLOT(GetResource(QKey)), Qt::QueuedConnection);
 }
 
 virtual void RequestManager::FindNode::UpdateResults(QList<QNode> results)
 {
     super(results);
     if (children_.isEmpty()) {
-        emit ResourceNotFound(requested_url_);
+        emit ResourceNotFound(requested_key_);
     }
 }
