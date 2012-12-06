@@ -11,6 +11,7 @@ class Request : public QObject
 {
     Q_OBJECT
 
+      // FIXME: Destructors
     public:
         static quint32 RandomId();
         static Request* Get(quint32 id);
@@ -39,14 +40,15 @@ class Request : public QObject
 
     protected:
         const static quint32 kDefaultTimeout = 10000;
-        static QHash<quint32, Request*> requests_;
+        static QHash<quint32, Request*> requests_; //FIXME:**; also, can access
+        // member directly
 
         quint32 id_;
         int type_;
-        QNode destination_;
+        QNode destination_; // FIXME**
         Request* parent_;
         QObject* observer_;
-        QList<quint32> children_;
+        QList<quint32> children_; // FIXME**
 
         QTimer timer_;
 };
@@ -88,8 +90,8 @@ class FindRequest : public Request
     protected:
         void MakeChild(QNode dest);
 
-        QKey requested_key_;
-        QNodeList results_;
+        QKey requested_key_; // QKey*
+        QNodeList results_; // FIXME: NodeList*
 
 };
 

@@ -52,7 +52,7 @@ class KademliaClient : public DataServer
     protected:
         const static quint16 kDefaultPort = 42600;
 
-        QNodeId node_id_;
+        QNodeId node_id_; // FIXME: also **
         QUdpSocket* udp_socket_;
         RequestManager* request_manager_;
 };

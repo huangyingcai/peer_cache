@@ -10,7 +10,7 @@ RequestManager::RequestManager(QNodeId id, QNodeAddress bootstrap_addr,
 {
     node_id_ = id;
     initialized_ = false;
-    bootstrap_addr_ = bootstrap_addr;
+    bootstrap_addr_ = qMakePair(bootstrap_addr.first, bootstrap_addr.second);
     // Initialize buckets
     for (int i = 0; i < kKeyLength * 8; i++) {
         buckets_[i] = new QNodeList;    // TODO: memory
@@ -43,6 +43,7 @@ quint16 RequestManager::Bucket(QKey key)
 // TODO: verify that responded from right node
 void RequestManager::UpdateRequest(quint32 request_id, QNodeList nodes)
 {
+    qDebug() << "Updating request: " << request_id;
     QNodeList::iterator i;
     for (i = nodes.begin(); i != nodes.end(); i++) {
         UpdateBuckets(*i);
@@ -60,6 +61,7 @@ void RequestManager::UpdateRequest(quint32 request_id, QNodeList nodes)
     if ((req = Request::Get(request_id))) {
         req->UpdateResults(nodes); // Works for PING
     }
+    qDebug() << "Request Updated";
 }
 
 void RequestManager::CloseRequest(quint32 request_id)
@@ -127,7 +129,7 @@ void RequestManager::IssueFindValue(QNodeId id)
     QNodeList closest = ClosestNodes(id);
 
     if (closest.isEmpty()) return; // This node is supposed to store it
-    // FIXME: EMit node found
+    // FIXME: Emit node found
 
     QNodeList::const_iterator i = closest.constBegin();
     // Choose one arbitrarily to be the parent
@@ -139,7 +141,7 @@ void RequestManager::IssueFindValue(QNodeId id)
     }
 }
 
-QList<QNode> RequestManager::ClosestNodes(QKey key, quint16 num)
+QNodeList RequestManager::ClosestNodes(QKey key, quint16 num)
 {
     QList<QNode> nodes;
 

@@ -26,7 +26,7 @@ class DataServer : public QTcpServer
         const static quint16 kDefaultPort = 42600;
         const static quint64 kBufferSize = 1024;
 
-        QHash<QKey, QFile*> files_;
+        QHash<QKey, QFile*> files_; //  FIXME*
 
         class Download
         {
@@ -45,7 +45,7 @@ class DataServer : public QTcpServer
                 void Write(char* buff, quint64 num_bytes);
 
             private:
-                QKey key_;
+                QKey key_; // FIXME *
                 QFile* file_; // Never freed
                 quint64 size_;
                 quint64 bytes_read_;

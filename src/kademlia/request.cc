@@ -38,10 +38,10 @@ void Request::RemoveRequest(quint32 id)
 Request::Request(int type, QNode dest, QObject* observer,
     Request* parent)
 {
-    qDebug() << "Initializing a new Request Object";
     id_ = Request::RandomId();
     type_ = type;
-    destination_ = dest;
+    destination_ =
+      qMakePair(dest.first, qMakePair(dest.second.first, dest.second.second));
     parent_ = parent;
     observer_ = observer;
     children_ = QList<quint32>();
@@ -49,6 +49,7 @@ Request::Request(int type, QNode dest, QObject* observer,
 
 void Request::Init()
 {
+    qDebug() << "Initializing a new Request Object";
     connect(this, SIGNAL(Ready(Request*)), observer_,
         SLOT(InitiateRequest(Request*)));
     connect(this, SIGNAL(Complete(quint32)), observer_,
@@ -108,13 +109,13 @@ FindRequest::FindRequest(int type, QNode dest, QKey key,
     Request(type, dest, observer, parent)
 {
     requested_key_ = key;
-    results_ = QList<QNode>();
+    results_ = QNodeList();
 }
 
 void FindRequest::UpdateResults(QNodeList nodes)
 {
     if (parent_) { // it's a child
-        results_ = nodes;
+        results_ = QNodeList(nodes);
         emit Complete(id_);
     } else { // it's a parent
         QNodeList sorted;
@@ -127,7 +128,7 @@ void FindRequest::UpdateResults(QNodeList nodes)
                 QBitArray cur_dist = Distance(cur_node.first,
                     requested_key_);
 
-                QList<QNode>::iterator i;
+                QNodeList::iterator i;
                 for (i = sorted.begin(); i != sorted.end(); i++) {
                     QBitArray dist =
                         Distance(i->first, requested_key_);
@@ -139,7 +140,7 @@ void FindRequest::UpdateResults(QNodeList nodes)
         }
 
         // TODO: qBinaryFind?
-        QList<QNode>::iterator i, j;
+        QNodeList::iterator i, j;
         for (i = sorted.begin(); i != sorted.end(); i++) {
             if (results_.indexOf(*i) > 0) continue;
             if (results_.size() < kBucketSize) {
@@ -207,7 +208,7 @@ FindValueRequest::FindValueRequest(QNode dest, QKey key,
       //  SLOT(GetResource(QKey)), Qt::QueuedConnection);
 }
 
-void FindValueRequest::UpdateResults(QList<QNode> results)
+void FindValueRequest::UpdateResults(QNodeList results)
 {
     FindRequest::UpdateResults(results);
     if (children_.isEmpty()) {

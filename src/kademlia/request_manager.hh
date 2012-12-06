@@ -35,7 +35,7 @@ class RequestManager : public QObject
         void HasRequest(int, quint32, QNode, QKey);
 
     private:
-        QNodeId node_id_;
+        QNodeId node_id_; // FIXME - all *
         bool initialized_;
         QNodeAddress bootstrap_addr_;
         QVector<QNodeList*> buckets_;

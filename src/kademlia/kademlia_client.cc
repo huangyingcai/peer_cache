@@ -2,11 +2,11 @@
 #include "includes.hh"
 #include "kademlia_client.hh"
 
-QStringList KademliaClient::SerializeNodes(QList<QNode> nodes)
+QStringList KademliaClient::SerializeNodes(QNodeList nodes)
 {
     QStringList node_strings;
 
-    QList<QNode>::const_iterator i;
+    QNodeList::const_iterator i;
     for (i = nodes.constBegin(); i != nodes.constEnd(); i++) {
         QNodeId id = i->first;
         QHostAddress addr = i->second.first;
@@ -18,9 +18,9 @@ QStringList KademliaClient::SerializeNodes(QList<QNode> nodes)
     return node_strings;
 }
 
-QList<QNode> KademliaClient::DeserializeNodeStrings(QStringList node_strings)
+QNodeList KademliaClient::DeserializeNodeStrings(QStringList node_strings)
 {
-    QList<QNode> nodes;
+    QNodeList nodes;
 
     QStringList::const_iterator i;
     for (i = node_strings.constBegin(); i != node_strings.constEnd();
@@ -60,7 +60,7 @@ KademliaClient::KademliaClient(QNodeAddress bootstrap_addr) : DataServer()
     udp_socket_ = new QUdpSocket();
     quint16 p = kDefaultPort;
     while (!udp_socket_->bind(QHostAddress::LocalHost, p++));
-    // qDebug() << "Bound to port " << p - 1;
+    qDebug() << "Bound client to port " << p - 1;
     // udp_socket_->bind(QHostAddress::LocalHost, kDefaultPort);
     connect(udp_socket_, SIGNAL(readyRead()), this,
         SLOT(ReadPendingDatagrams()));

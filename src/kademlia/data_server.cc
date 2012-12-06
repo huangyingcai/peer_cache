@@ -4,7 +4,9 @@
 
 DataServer::DataServer()
 {
-    listen(QHostAddress::LocalHost, kDefaultPort);
+    quint16 p = kDefaultPort;
+    while (!listen(QHostAddress::LocalHost, p++));
+    qDebug() << "Data Server connection on " << p;
     connect(this, SIGNAL(newConnection()), this,
         SLOT(AcceptIncomingConnection()));
 }
