@@ -3,29 +3,38 @@
 #include "request.hh"
 #include "request_manager.hh"
 
-QHash<quint32, Request*> Request::requests_;
-
 RequestManager::RequestManager(QNodeId id, QNodeAddress bootstrap_addr,
     QObject* parent) : QObject(parent)
 {
     node_id_ = id;
     initialized_ = false;
-    bootstrap_addr_ = qMakePair(bootstrap_addr.first, bootstrap_addr.second);
+    buckets_ = new QVector(kKeyLength * 8);
     // Initialize buckets
     for (int i = 0; i < kKeyLength * 8; i++) {
-        buckets_[i] = new QNodeList;    // TODO: memory
+        buckets_[i] = new QNodeList();
     }
+    requests_ = new QHash<quint32, Request*>();
+
     qDebug() << "Request Manager created";
 }
 
+RequestManager::~RequestManager()
+{
+    delete node_id_;
+    for (int i = 0; i < kKeyLength * 8; i++) {
+        delete buckets_[i];
+    }
+    delete buckets_;
+    delete requests_;
+}
+
 // TODO: Make sure called before all else
-void RequestManager::RequestManager::Init()
+void RequestManager::RequestManager::Init(QNodeAddress bootstrap_address)
 {
     if (!initialized_) {
-        QNode node(QByteArray(), bootstrap_addr_);
+        QNode node = qMakePair(QByteArray(), bootstrap_addr);
         FindNodeRequest* req =
             new FindNodeRequest(node, node_id_, this);
-        req->Init();
         initialized_ = true;
     }
 }
@@ -64,21 +73,17 @@ void RequestManager::UpdateRequest(quint32 request_id, QNodeList nodes)
     qDebug() << "Request Updated";
 }
 
+// FIXME: Timers
+// FIXME:
 void RequestManager::CloseRequest(quint32 request_id)
 {
-    Request* req;
-    if ((req = Request::Get(request_id))) {
-        // Close Children
-        QList<quint32>::const_iterator i;
-        for (i = req->get_children().constBegin();
-                i != req->get_children().constEnd(); i++) {
-            CloseRequest(*i);
-        }
+    Request* request = requests_->value(request_id);
+    if (request) {
 
         // De-register request
-        Request::RemoveRequest(request_id);
-        // Free memory allocated by Issue*() methods
+        request->removeAll(request_id);
         delete req;
+      // TODO: do I need to worry about children??
     }
     // FIXME: need to deregister with parent and also, need to kill parents for
     // FIND_VALUE
@@ -90,10 +95,12 @@ void RequestManager::CloseRequest(quint32 request_id)
 
 }
 
-void RequestManager::InitiateRequest(Request* req)
+void RequestManager::InitiateRequest(quint32 request_id, Request* request)
 {
-    emit HasRequest(req->get_type(), req->get_id(), req->get_destination(),
-        req->get_requested_key());
+    requests_->insert(request_id, request);
+    emit HasRequest(request->get_type(), request->get_id(),
+        request->get_destination(),
+        request->get_requested_key());
 }
 
 void RequestManager::IssueStore(QKey key)
@@ -104,7 +111,6 @@ void RequestManager::IssueStore(QKey key)
 
     QNode node = closest.takeFirst();
     StoreRequest* req = new StoreRequest(node, key, this);
-    req->Init();
 }
 
 // TODO: DRY
@@ -117,10 +123,8 @@ void RequestManager::IssueFindNode(QNodeId id)
     QNodeList::const_iterator i = closest.constBegin();
     // Choose one arbitrarily to be the parent
     FindNodeRequest* parent = new FindNodeRequest(*i, id, this);
-    parent->Init();
     for (i += 1; i != closest.constEnd(); i++) {
-        FindNodeRequest* req = new FindNodeRequest(*i, id, parent);
-        req->Init();
+        parent->MakeChild(*id);
     }
 }
 
@@ -134,10 +138,8 @@ void RequestManager::IssueFindValue(QNodeId id)
     QNodeList::const_iterator i = closest.constBegin();
     // Choose one arbitrarily to be the parent
     FindValueRequest* parent = new FindValueRequest(*i, id, this);
-    parent->Init();
     for (i += 1; i != closest.constEnd(); i++) {
-        FindValueRequest* req = new FindValueRequest(*i, id, parent);
-        req->Init();
+        parent->MakeChild(*id);
     }
 }
 
@@ -180,7 +182,6 @@ void RequestManager::RefreshBucket(quint16 bucket)
 
 void RequestManager::UpdateBuckets(QNode node)
 {
-    // TODO: PING procedure
     if (node.first == QString(node_id_.constData())) return;
 
     quint16 b = Bucket(node.first);
@@ -188,6 +189,7 @@ void RequestManager::UpdateBuckets(QNode node)
     int i = buckets_[b]->indexOf(node);
     if (i > 0) buckets_[b]->removeAt(i);
 
+    // TODO: PING procedure
     buckets_[b]->append(node);
     qDebug() << "Updating bucket" << b << " with node " << node;
 }

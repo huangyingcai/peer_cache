@@ -12,88 +12,56 @@ quint32 Request::RandomId()
     return qrand();
 }
 
-Request* Request::Get(quint32 id)
-{
-    return requests_->value(id);
-}
-
-void Request::RegisterRequest(quint32 id, Request* req)
-{
-    if (req->get_type() != STORE) {
-        requests_->insert(id, req); // Add to list of all requests
-        qDebug() << requests_->keys().size() << " requests remaining";
-    }
-}
-
-void Request::RemoveRequest(quint32 id)
-{
-    qDebug() << "Request: " << id << " closed";
-    requests_->remove(id);
-    qDebug() << requests_->keys().size() << " requests remaining";
-}
+// void Request::RegisterRequest(quint32 id, Request* req)
+// {
+//     requests_->insert(id, req); // Add to list of all requests
+//     qDebug() << requests_->keys().size() << " requests remaining";
+// }
+// 
+// void Request::RemoveRequest(quint32 id, Request* req)
+// {
+//     qDebug() << "Request: " << id << " closed";
+//     requests_->remove(id);
+//     qDebug() << requests_->keys().size() << " requests remaining";
+// }
 
 
 // Base class Implementation
 
 Request::Request(int type, QNode dest, QObject* manager,
-    Request* parent)
+    FindRequest* parent) : type_(type), parent_(parent), manager_(manager),
+                       resource_key_(NULL)
 {
+    qDebug() << "Initializing a new request" << id_;
+
     id_ = Request::RandomId();
-    type_ = type;
     destination_ = new QPair<QNodeId, QNodeAddress>(dest.first, dest.second);
-    parent_ = parent;
-    manager_ = manager;
-    children_ = new QList<quint32>();
-    resource_key_ = NULL;
-    timer_ = new QTimer();
+
+    manager_->InitiateRequest(id_, this);
 }
 
 Request::~Request()
 {
     delete destination_;
-    delete children_;
-    delete timer_;
-    // TODO: notify parents
 }
 
-void Request::Init()
+
+void Request::Update(QNodeList nodes)
 {
-    qDebug() << "Initializing a new Request Object";
-    connect(this, SIGNAL(Ready(Request*)), manager_,
-        SLOT(InitiateRequest(Request*)));
-    connect(this, SIGNAL(Complete(quint32)), manager_,
-        SLOT(CloseRequest(quint32))); // TODO: Queued?
+    qDebug() << "Updating request: " << id_;
+    Terminate();
+}
+
+void Request::Terminate()
+{
+    qDebug() << "Terminating request" << id_;
 
     if (parent_) {
-        connect(this, SIGNAL(Complete(quint32)), parent_,
-            SLOT(ProcessChildCompletion(quint32)));
-        parent_->AddChild(id_);
+        parent->ProcessChildCompletion(id_);
     }
 
-    Request::RegisterRequest(id_, this);
-
-    connect(timer_, SIGNAL(timeout()), this, SLOT(Timeout()));
-    timer_->start(kDefaultTimeout);
-
-    emit Ready(this);
-}
-
-void Request::Timeout()
-{
-    qDebug() << "Request #" << id_ << " timed out";
-    emit Complete(id_);
-}
-
-void Request::AddChild(quint32 id)
-{
-    children_->append(id);
-    timer_->stop(); // If it has a child, the original request is complete and
-                   // is just contingent on children terminating
-}
-
-void Request::UpdateResults(QNodeList nodes)
-{
-    emit Complete(id_);
+    manager_->CloseRequest(id_); // TODO: might be obviated
+    // TODO: Use for when FindValue request terminates with success, etc
 }
 
 // PingRequest
@@ -132,11 +100,11 @@ FindRequest::~FindRequest()
     delete results_;
 }
 
-void FindRequest::UpdateResults(QNodeList nodes)
+void FindRequest::Update(QNodeList nodes)
 {
     if (parent_) { // it's a child
         results_ = QNodeList(nodes);
-        emit Complete(id_);
+        Terminate();
     } else { // it's a parent
         QNodeList sorted;
         // TODO: DRY; qsort?
@@ -184,32 +152,37 @@ void FindRequest::UpdateResults(QNodeList nodes)
         if (children_->isEmpty()) emit Complete(id_);
     }
 }
-void FindRequest::ProcessChildCompletion(quint32 child_id)
-{
-    Request* child = Request::Get(child_id);
-    if (!child) return;
-    if (child->get_type() == FIND_NODE || child->get_type() == FIND_VALUE) {
-        UpdateResults(((FindRequest*)child)->results_);
-        children_->removeAll(child_id);
-        if (children_->isEmpty()) emit Complete(id_);
-    } else if (child->get_type() == PING) {
-        children_->removeAll(child_id);
-        timer_->start(kDefaultTimeout);
-        emit Ready(this);
-    }
-}
+
 
 void FindRequest::MakeChild(QNode dest)
 {
-      if (type_ == FIND_NODE) {
-          FindNodeRequest* req =
-              new FindNodeRequest(dest, *resource_key_, manager_, this);
-          req->Init();
-      } else { // FIND_VALUE
-          FindValueRequest* req =
-              new FindValueRequest(dest, *resource_key_, manager_, this);
-          req->Init();
-      }
+    Request* child;
+    if (type_ == FIND_NODE) {
+        child = new FindNodeRequest(dest, *resource_key_, manager_, this);
+    } else { // FIND_VALUE
+        child = new FindValueRequest(dest, *resource_key_, manager_, this);
+    }
+    children_->insert(child->get_id(), child);
+}
+
+void FindRequest::ProcessChildCompletion(quint32 child_id)
+{
+    Request* child = get_child(child_id);
+    if (child) {
+        if (child->get_type() == FIND_NODE || child->get_type() == FIND_VALUE) {
+            QNodeList child_results = ((FindRequest*)child)->get_results();
+            Update(child_results);
+            children_->removeAll(child_id);
+        } else if (child->get_type() == PING) {
+            manager->InitiateRequest(this);
+        }
+        RemoveChild(child_id);
+    }
+}
+
+void FindRequest::RemoveChild(quint32 child_id)
+{
+    children->removeAll(id);
 }
 
 // Find Node Request
@@ -218,20 +191,23 @@ FindNodeRequest::FindNodeRequest(QNode dest, QKey key,
     QObject* manager, Request* parent) :
     FindRequest(FIND_NODE, dest, key, manager, parent) {}
 
+void FindNodeRequest::ProcessChildCompletion(quint32 child_id)
+{
+    FindRequest::ProcessChildCompletion(child_id);
+    if (children_->isEmpty()) Terminate();
+}
+
 // Find Value Request
 
 FindValueRequest::FindValueRequest(QNode dest, QKey key,
     QObject* manager, Request* parent) :
-    FindRequest(FIND_VALUE, dest, key, manager, parent)
-{
-    // TODO: connect(&new_request, SIGNAL(ResourceNotFound(QKey)), manager,
-      //  SLOT(GetResource(QKey)), Qt::QueuedConnection);
-}
+    FindRequest(FIND_VALUE, dest, key, manager, parent) {}
 
-void FindValueRequest::UpdateResults(QNodeList results)
+void FindValueRequest::ProcessChildCompletion(quint32 child_id)
 {
-    FindRequest::UpdateResults(results);
+    FindRequest::ProcessChildCompletion(child_id);
     if (children_->isEmpty()) {
-        emit ResourceNotFound(*resource_key_);
+        manager->HandleMissingResource(*resource_key_);
+        Terminate();
     }
 }
