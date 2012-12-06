@@ -22,13 +22,11 @@ RequestManager::RequestManager(QNodeId id, QNodeAddress bootstrap_addr,
 void RequestManager::RequestManager::Init()
 {
     if (!initialized_) {
-        qDebug() << "Initializing request manager";
         QNode node(QByteArray(), bootstrap_addr_);
         FindNodeRequest* req =
             new FindNodeRequest(node, node_id_, this);
         req->Init();
         initialized_ = true;
-        qDebug() << "Request Manager initialized";
     }
 }
 
@@ -45,9 +43,14 @@ quint16 RequestManager::Bucket(QKey key)
 // TODO: verify that responded from right node
 void RequestManager::UpdateRequest(quint32 request_id, QNodeList nodes)
 {
-    QList<QNode>::const_iterator i;
-    for (i = nodes.constBegin(); i != nodes.constEnd(); i++) {
-        UpdateBuckets(*i);
+    QNodeList::iterator i;
+    for (i = nodes.begin(); i != nodes.end(); i++) {
+        if (i->first == QString(node_id_.constData())) {
+            i = nodes.erase(i);
+            i--;
+        } else {
+            UpdateBuckets(*i);
+        }
     }
 
     Request* req;
@@ -78,8 +81,6 @@ void RequestManager::CloseRequest(quint32 request_id)
 
 void RequestManager::InitiateRequest(Request* req)
 {
-    qDebug() << "New request of type: " << req->get_type() << " destination: " <<
-        req->get_destination() << " for key: " << req->get_requested_key();
     emit HasRequest(req->get_type(), req->get_id(), req->get_destination(),
         req->get_requested_key());
 }
@@ -169,10 +170,13 @@ void RequestManager::RefreshBucket(quint16 bucket)
 void RequestManager::UpdateBuckets(QNode node)
 {
     // TODO: PING procedure
+    if (node.first == QString(node_id_.constData())) return;
+
     quint16 b = Bucket(node.first);
 
     int i = buckets_[b]->indexOf(node);
     if (i > 0) buckets_[b]->removeAt(i);
 
     buckets_[b]->append(node);
+    qDebug() << "Updating bucket" << b << " with node " << node;
 }

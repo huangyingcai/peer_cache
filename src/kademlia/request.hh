@@ -5,6 +5,7 @@
 #include "constants.hh"
 
 #include <QHash>
+#include <QTimer>
 
 class Request : public QObject
 {
@@ -18,7 +19,6 @@ class Request : public QObject
 
         Request(int type, QNode dest, QObject* observer,
             Request* parent = NULL);
-        Request(const Request& other);
         void Init();
 
         quint32 get_id() { return id_; };
@@ -28,14 +28,17 @@ class Request : public QObject
         Request* get_parent() { return parent_; };
         virtual QKey get_requested_key() { return QByteArray(); };
 
+    public slots:
         void AddChild(quint32 id);
         virtual void UpdateResults(QNodeList nodes = QNodeList());
+        void Timeout();
 
     signals:
         void Ready(Request*);
         void Complete(quint32);
 
     protected:
+        const static quint32 kDefaultTimeout = 10000;
         static QHash<quint32, Request*> requests_;
 
         quint32 id_;
@@ -44,6 +47,8 @@ class Request : public QObject
         Request* parent_;
         QObject* observer_;
         QList<quint32> children_;
+
+        QTimer timer_;
 };
 
 class PingRequest : public Request
@@ -52,7 +57,6 @@ class PingRequest : public Request
 
     public:
         PingRequest(QNode dest, QObject* observer, Request* parent = NULL);
-        PingRequest(const PingRequest& other);
 };
 
 class StoreRequest : public Request
@@ -62,7 +66,6 @@ class StoreRequest : public Request
     public:
         StoreRequest(QNode dest, QKey key, QObject* observer,
             Request* parent = NULL);
-        StoreRequest(const StoreRequest& other);
 
     protected:
         QKey resource_key_;
@@ -75,16 +78,18 @@ class FindRequest : public Request
     public:
         FindRequest(int type, QNode dest, QKey key, QObject* observer,
             Request* parent = NULL);
-        FindRequest(const FindRequest& other);
 
         virtual QKey get_requested_key() { return requested_key_; };
-        void ProcessChildCompletion(quint32 child_id);
         virtual void UpdateResults(QList<QNode> results);
         void MakeChild(QNode dest);
+
+    protected slots:
+        void ProcessChildCompletion(quint32 child_id);
 
     protected:
         QKey requested_key_;
         QNodeList results_;
+
 };
 
 class FindNodeRequest : public FindRequest
@@ -94,7 +99,6 @@ class FindNodeRequest : public FindRequest
     public:
         FindNodeRequest(QNode dest, QKey key, QObject* observer,
             Request* parent = NULL);
-        FindNodeRequest(const FindNodeRequest& other);
 };
 
 class FindValueRequest : public FindRequest
@@ -104,7 +108,6 @@ class FindValueRequest : public FindRequest
     public:
         FindValueRequest(QNode dest, QKey key, QObject* observer,
             Request* parent = NULL);
-        FindValueRequest(const FindValueRequest& other);
 
         virtual void UpdateResults(QList<QNode> results);
 

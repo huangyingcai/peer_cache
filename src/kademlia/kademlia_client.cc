@@ -94,7 +94,7 @@ void KademliaClient::ReadPendingDatagrams()
             ERROR("Failed to deserialize datagram into QVariantMap");
             return;
         }
-        qDebug() << "Deserialized datagram to " << message;
+        // qDebug() << "Deserialized datagram to " << message;
 
         emit DatagramReady(qMakePair(addr, port), message);
     }
@@ -110,6 +110,8 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
         return ;
     }
     QNode node(source_id, addr);
+    request_manager_->UpdateBuckets(node);
+    qDebug() << "Received datagram from " << node;
 
     // Handle request
     quint16 type = message.value("Type").toUInt();
@@ -180,7 +182,7 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
 
 void KademliaClient::SendDatagram(QNodeAddress dest, QVariantMap& message)
 {
-    qDebug() << "Sending datagram to " << dest << "\n" << message;
+    qDebug() << "Sending datagram to " << dest; // << "\n" << message;
     // Serialize into a datagram
     QByteArray datagram;
     QDataStream serializer(&datagram, QIODevice::ReadWrite);

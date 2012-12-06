@@ -16,9 +16,9 @@ class RequestManager : public QObject
         void Init(); // Must be called before Issue*() commands
 
         quint16 Bucket(QKey key);
+        void UpdateBuckets(QNode node);
         QList<QNode> ClosestNodes(QKey key, quint16 num = kBucketSize);
 
-    public:
         // Kademlia RPCs
         void IssueStore(QKey key);
         void IssueFindNode(QNodeId id);
@@ -40,7 +40,6 @@ class RequestManager : public QObject
         QNodeAddress bootstrap_addr_;
         QVector<QNodeList*> buckets_;
 
-        void UpdateBuckets(QNode node);
 };
 
 #endif // KADEMLIA_REQUEST_MANAGER_HH

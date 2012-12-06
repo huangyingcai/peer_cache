@@ -12,6 +12,7 @@
 #include <QUdpSocket>
 #include <QTcpSocket>
 #include <QFile>
+#include <QTimer>
 
 #include <QDebug>
 
