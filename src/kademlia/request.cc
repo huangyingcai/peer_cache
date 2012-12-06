@@ -27,9 +27,7 @@ void Request::RegisterRequest(quint32 id, Request* req)
 
 void Request::RemoveRequest(quint32 id)
 {
-    // FIXME: frees are going to get messed up
     qDebug() << "Request: " << id << " closed";
-    delete requests_.value(id);
     requests_.remove(id);
     qDebug() << requests_.keys().size() << " requests remaining";
 }
@@ -79,7 +77,8 @@ void Request::Timeout()
 void Request::AddChild(quint32 id)
 {
     children_.append(id);
-    timer_.stop(); // If it has a child, shouldn't restart
+    timer_.stop(); // If it has a child, the original request is complete and
+                   // is just contingent on children terminating
 }
 
 void Request::UpdateResults(QNodeList nodes)

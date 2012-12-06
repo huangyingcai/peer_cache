@@ -45,11 +45,14 @@ void RequestManager::UpdateRequest(quint32 request_id, QNodeList nodes)
 {
     QNodeList::iterator i;
     for (i = nodes.begin(); i != nodes.end(); i++) {
+        UpdateBuckets(*i);
+    }
+
+    // Delete the source node if it exists
+    for (i = nodes.begin(); i != nodes.end(); i++) {
         if (i->first == QString(node_id_.constData())) {
-            i = nodes.erase(i);
-            i--;
-        } else {
-            UpdateBuckets(*i);
+            nodes.erase(i);
+            break;
         }
     }
 
@@ -63,8 +66,6 @@ void RequestManager::CloseRequest(quint32 request_id)
 {
     Request* req;
     if ((req = Request::Get(request_id))) {
-        Request::RemoveRequest(request_id);
-
         // Close Children
         QList<quint32>::const_iterator i;
         for (i = req->get_children().constBegin();
@@ -72,11 +73,19 @@ void RequestManager::CloseRequest(quint32 request_id)
             CloseRequest(*i);
         }
 
-        // Close Parent
-        if (req->get_parent()) {
-            CloseRequest(req->get_parent()->get_id());
-        }
+        // De-register request
+        Request::RemoveRequest(request_id);
+        // Free memory allocated by Issue*() methods
+        delete req;
     }
+    // FIXME: need to deregister with parent and also, need to kill parents for
+    // FIND_VALUE
+
+    //     // Close Parent
+    //     if (req->get_parent()) {
+    //         CloseRequest(req->get_parent()->get_id());
+    //     }
+
 }
 
 void RequestManager::InitiateRequest(Request* req)

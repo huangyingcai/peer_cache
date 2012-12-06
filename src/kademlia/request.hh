@@ -81,12 +81,13 @@ class FindRequest : public Request
 
         virtual QKey get_requested_key() { return requested_key_; };
         virtual void UpdateResults(QList<QNode> results);
-        void MakeChild(QNode dest);
 
     protected slots:
         void ProcessChildCompletion(quint32 child_id);
 
     protected:
+        void MakeChild(QNode dest);
+
         QKey requested_key_;
         QNodeList results_;
 

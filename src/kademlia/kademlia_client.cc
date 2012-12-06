@@ -189,6 +189,7 @@ void KademliaClient::SendDatagram(QNodeAddress dest, QVariantMap& message)
     serializer << message;
 
     udp_socket_->writeDatagram(datagram, dest.first, dest.second);
+    qDebug() << "Wrote datagram";
 }
 
 // Sending outgoing request packets
