@@ -30,6 +30,7 @@ QFile* DataServer::Value(QKey key)
 void DataServer::AcceptIncomingConnection()
 {
     QTcpSocket* connection = nextPendingConnection();
+    qDebug() << "Incoming connection from " << connection;
     connect(connection, SIGNAL(disconnected()), connection,
         SLOT(deleteLater()));
     connect(connection, SIGNAL(readyRead()), this,

@@ -26,6 +26,8 @@ void Request::RegisterRequest(quint32 id, Request* req)
 
 void Request::RemoveRequest(quint32 id)
 {
+    // FIXME: frees are going to get messed up
+    qDebug() << "Request: " << id << " closed";
     delete requests_.value(id);
     requests_.remove(id);
 }
@@ -36,14 +38,13 @@ void Request::RemoveRequest(quint32 id)
 Request::Request(int type, QNode dest, QObject* observer,
     Request* parent)
 {
+    qDebug() << "Initializing a new Request Object";
     id_ = Request::RandomId();
     type_ = type;
     destination_ = dest;
     parent_ = parent;
     observer_ = observer;
     children_ = QList<quint32>();
-    Init();
-    emit Ready(this);
 }
 
 Request::Request(const Request& other) : QObject()
@@ -54,23 +55,23 @@ Request::Request(const Request& other) : QObject()
     parent_ = other.parent_;
     observer_ = other.observer_;
     children_ = other.children_;
-    Init();
 }
 
 void Request::Init()
 {
     connect(this, SIGNAL(Ready(Request*)), observer_,
-        SLOT(InitiateRequest(Request*)), Qt::QueuedConnection);
+        SLOT(InitiateRequest(Request*)));
     connect(this, SIGNAL(Complete(quint32)), observer_,
-        SLOT(CloseRequest(quint32)), Qt::QueuedConnection);
+        SLOT(CloseRequest(quint32))); // TODO: Queued?
 
     if (parent_) {
         connect(this, SIGNAL(Complete(quint32)), parent_,
-            SLOT(ProcessChildCompletion(quint32)), Qt::QueuedConnection);
+            SLOT(ProcessChildCompletion(quint32)));
         parent_->AddChild(id_);
     }
 
     Request::RegisterRequest(id_, this);
+    emit Ready(this);
 }
 
 void Request::AddChild(quint32 id)
@@ -200,6 +201,9 @@ FindNodeRequest::FindNodeRequest(QNode dest, QKey key,
     QObject* observer, Request* parent) :
     FindRequest(FIND_NODE, dest, key, observer, parent) {}
 
+FindNodeRequest::FindNodeRequest(const FindNodeRequest& other) :
+    FindRequest(other) {}
+
 // Find Value Request
 
 FindValueRequest::FindValueRequest(QNode dest, QKey key,
@@ -210,8 +214,8 @@ FindValueRequest::FindValueRequest(QNode dest, QKey key,
       //  SLOT(GetResource(QKey)), Qt::QueuedConnection);
 }
 
-FindValueRequest::FindValueRequest(
-    const FindValueRequest& other) : FindRequest(other)
+FindValueRequest::FindValueRequest(const FindValueRequest& other) :
+    FindRequest(other)
 {
     // TODO: connect(&new_request, SIGNAL(ResourceNotFound(QKey)), observer,
         // SLOT(GetResource(QKey)), Qt::QueuedConnection);

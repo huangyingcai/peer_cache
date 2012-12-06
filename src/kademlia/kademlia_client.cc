@@ -35,7 +35,7 @@ QList<QNode> KademliaClient::DeserializeNodeStrings(QStringList node_strings)
     return nodes;
 }
 
-KademliaClient::KademliaClient(QNodeAddress bootstrap_addr)
+KademliaClient::KademliaClient(QNodeAddress bootstrap_addr) : DataServer()
 {
     qsrand(time(NULL));
     QBitArray bits(kKeyLength * 8, 0);
@@ -48,11 +48,20 @@ KademliaClient::KademliaClient(QNodeAddress bootstrap_addr)
     }
     qDebug() << "Node Id is: " << node_id_;
 
-    udp_socket_ = new QUdpSocket(this);
+    // Connect remaining signals and slots to implement asynch server
+    // TODO: Qt::Queued Connection
+    connect(this, SIGNAL(DatagramReady(QNodeAddress, QVariantMap)),
+        this, SLOT(ProcessDatagram(QNodeAddress, QVariantMap)));
+    connect(this, SIGNAL(RequestReady(QNodeAddress, quint32, QVariantMap)),
+        this, SLOT(SendRequest(QNodeAddress, quint32, QVariantMap)));
+    connect(this, SIGNAL(ReplyReady(QNodeAddress, quint32, QVariantMap)), this,
+        SLOT(SendReply(QNodeAddress, quint32, QVariantMap)));
+
+    udp_socket_ = new QUdpSocket();
     quint16 p = kDefaultPort;
-    while (!udp_socket_->bind(p++));
-    qDebug() << "Bound to port " << p - 1;
-    // udp_socket_.bind(QHostAddress::LocalHost, kDefaultPort);
+    while (!udp_socket_->bind(QHostAddress::LocalHost, p++));
+    // qDebug() << "Bound to port " << p - 1;
+    // udp_socket_->bind(QHostAddress::LocalHost, kDefaultPort);
     connect(udp_socket_, SIGNAL(readyRead()), this,
         SLOT(ReadPendingDatagrams()));
 
@@ -64,14 +73,8 @@ KademliaClient::KademliaClient(QNodeAddress bootstrap_addr)
     connect(request_manager_, SIGNAL(HasRequest(int, quint32, QNode, QKey)),
         SLOT(ProcessNewRequest(int, quint32, QNode, QKey)));
 
-    // Connect remaining signals and slots to implement asynch server
-    // TODO: Qt::Queued Connection
-    connect(this, SIGNAL(DatagramReady(QNodeAddress, QVariantMap)),
-        this, SLOT(ProcessDatagram(QNodeAddress, QVariantMap)));
-    connect(this, SIGNAL(RequestReady(QNodeAddress, quint32, QVariantMap)),
-        this, SLOT(SendRequest(QNodeAddress, quint32, QVariantMap)));
-    connect(this, SIGNAL(ReplyReady(QNodeAddress, quint32, QVariantMap)), this,
-        SLOT(SendReply(QNodeAddress, quint32, QVariantMap)));
+    // Bootstrap process
+    request_manager_->Init();
 }
 
 void KademliaClient::ReadPendingDatagrams()
@@ -150,11 +153,10 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
             if (!key.isEmpty()) {
                 InitiateDownload(addr, request_id, key);
                 request_manager_->CloseRequest(request_id); // FIXME:
-            } else if (!nodes.isEmpty()) {
+            } else {
+                // TODO: errors?
                 nodes = KademliaClient::DeserializeNodeStrings(node_list);
                 emit ResponseReceived(request_id, nodes);
-            } else {
-                ERROR("Improper REPLY_VALUE");
             }
             break;
         case FIND_NODE:
@@ -167,12 +169,9 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
             break;
         case REPLY_NODE:
             node_list = message.value("Nodes").toStringList();
-            if (!nodes.isEmpty()) {
-                nodes = KademliaClient::DeserializeNodeStrings(node_list);
-                emit ResponseReceived(request_id, nodes);
-            } else {
-                ERROR("Improper REPLY_NODE");
-            }
+            // TODO: errors?
+            nodes = KademliaClient::DeserializeNodeStrings(node_list);
+            emit ResponseReceived(request_id, nodes);
             break;
         default:
             qDebug() << "Dropping malformed packet";
@@ -181,6 +180,7 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
 
 void KademliaClient::SendDatagram(QNodeAddress dest, QVariantMap& message)
 {
+    qDebug() << "Sending datagram to " << dest << "\n" << message;
     // Serialize into a datagram
     QByteArray datagram;
     QDataStream serializer(&datagram, QIODevice::ReadWrite);
@@ -194,6 +194,7 @@ void KademliaClient::SendDatagram(QNodeAddress dest, QVariantMap& message)
 void KademliaClient::ProcessNewRequest(int type, quint32 request_id, QNode dest,
     QKey key)
 {
+    qDebug() << "Has new request of type: " << type << " and dest " << dest;
     QNodeAddress dest_addr = dest.second;
     switch (type) {
         case PING:
@@ -235,7 +236,7 @@ void KademliaClient::SendStore(QNodeAddress dest, quint32 request_id, QKey key)
 {
     QVariantMap message;
     message.insert("Type", STORE);
-    message.insert("Store", key);
+    message.insert("Key", key);
 
     emit RequestReady(dest, request_id, message);
 }
@@ -245,7 +246,7 @@ void KademliaClient::SendFindNode(QNodeAddress dest, quint32 request_id,
 {
     QVariantMap message;
     message.insert("Type", FIND_NODE);
-    message.insert("Find Node", id);
+    message.insert("Id", id);
 
     emit RequestReady(dest, request_id, message);
 }

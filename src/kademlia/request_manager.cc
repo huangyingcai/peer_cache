@@ -5,16 +5,31 @@
 
 QHash<quint32, Request*> Request::requests_;
 
-RequestManager::RequestManager(QNodeId id, QNodeAddress bootstrap_node,
+RequestManager::RequestManager(QNodeId id, QNodeAddress bootstrap_addr,
     QObject* parent) : QObject(parent)
 {
     node_id_ = id;
+    initialized_ = false;
+    bootstrap_addr_ = bootstrap_addr;
+    // Initialize buckets
     for (int i = 0; i < kKeyLength * 8; i++) {
-        buckets_[i] = new QNodeList;
+        buckets_[i] = new QNodeList;    // TODO: memory
     }
+    qDebug() << "Request Manager created";
+}
 
-    QNode node = qMakePair(QByteArray(), bootstrap_node); // FIXME
-    new FindNodeRequest(node, id, this);
+// TODO: Make sure called before all else
+void RequestManager::RequestManager::Init()
+{
+    if (!initialized_) {
+        qDebug() << "Initializing request manager";
+        QNode node(QByteArray(), bootstrap_addr_);
+        FindNodeRequest* req =
+            new FindNodeRequest(node, node_id_, this);
+        req->Init();
+        initialized_ = true;
+        qDebug() << "Request Manager initialized";
+    }
 }
 
 quint16 RequestManager::Bucket(QKey key)
@@ -49,8 +64,8 @@ void RequestManager::CloseRequest(quint32 request_id)
 
         // Close Children
         QList<quint32>::const_iterator i;
-        for (i = req->get_children().constBegin(); i != req->get_children().constEnd();
-                i++) {
+        for (i = req->get_children().constBegin();
+                i != req->get_children().constEnd(); i++) {
             CloseRequest(*i);
         }
 
@@ -63,6 +78,8 @@ void RequestManager::CloseRequest(quint32 request_id)
 
 void RequestManager::InitiateRequest(Request* req)
 {
+    qDebug() << "New request of type: " << req->get_type() << " destination: " <<
+        req->get_destination() << " for key: " << req->get_requested_key();
     emit HasRequest(req->get_type(), req->get_id(), req->get_destination(),
         req->get_requested_key());
 }
@@ -74,7 +91,42 @@ void RequestManager::IssueStore(QKey key)
     if (closest.isEmpty()) return; // This node is supposed to store it
 
     QNode node = closest.takeFirst();
-    new StoreRequest(node, key, this);
+    StoreRequest* req = new StoreRequest(node, key, this);
+    req->Init();
+}
+
+// TODO: DRY
+void RequestManager::IssueFindNode(QNodeId id)
+{
+    QNodeList closest = ClosestNodes(id);
+
+    if (closest.isEmpty()) return; // This node is supposed to store it
+
+    QNodeList::const_iterator i = closest.constBegin();
+    // Choose one arbitrarily to be the parent
+    FindNodeRequest* parent = new FindNodeRequest(*i, id, this);
+    parent->Init();
+    for (i += 1; i != closest.constEnd(); i++) {
+        FindNodeRequest* req = new FindNodeRequest(*i, id, parent);
+        req->Init();
+    }
+}
+
+void RequestManager::IssueFindValue(QNodeId id)
+{
+    QNodeList closest = ClosestNodes(id);
+
+    if (closest.isEmpty()) return; // This node is supposed to store it
+    // FIXME: EMit node found
+
+    QNodeList::const_iterator i = closest.constBegin();
+    // Choose one arbitrarily to be the parent
+    FindValueRequest* parent = new FindValueRequest(*i, id, this);
+    parent->Init();
+    for (i += 1; i != closest.constEnd(); i++) {
+        FindValueRequest* req = new FindValueRequest(*i, id, parent);
+        req->Init();
+    }
 }
 
 QList<QNode> RequestManager::ClosestNodes(QKey key, quint16 num)

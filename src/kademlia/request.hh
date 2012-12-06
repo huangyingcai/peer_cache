@@ -94,6 +94,7 @@ class FindNodeRequest : public FindRequest
     public:
         FindNodeRequest(QNode dest, QKey key, QObject* observer,
             Request* parent = NULL);
+        FindNodeRequest(const FindNodeRequest& other);
 };
 
 class FindValueRequest : public FindRequest

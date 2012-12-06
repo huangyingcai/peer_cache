@@ -14,6 +14,7 @@ class DataServer : public QTcpServer
         void Store(QKey key, QFile* file);
         QFile* Value(QKey key);
 
+    public slots:
         // Data transmission
         void AcceptIncomingConnection();
         void ProcessDownloadRequest();
