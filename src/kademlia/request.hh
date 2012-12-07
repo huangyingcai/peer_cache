@@ -4,93 +4,98 @@
 #include "types.hh"
 #include "constants.hh"
 
-#include <QHash>
-#include <QTimer>
-
 class Request
 {
     public:
-        static quint32 RandomId();
+        virtual bool IsValidDestination(QNode node) = 0;
+        virtual void Update() = 0;
 
-        // Request lifecycle
-        Request(int type, QNode dest, QObject* manager,
-            FindRequest* parent = NULL); // FIXME: that's ugly with FindRequest*
-        ~Request();
-        virtual void Update(QNodeList nodes = QNodeList());
-        void Terminate();
-
-        quint32 get_id() { return id_; };
+        quint32 get_request_number() { return request_number_; };
         int get_type() { return type_; };
-        QNode get_destination() { return *destination_; };
-        FindRequest* get_parent() { return parent_; };
-        QKey get_resource_key() { // FIXME??
-            return (resource_key_ ? *resource_key_ : QKey());
-        }
 
     protected:
-        // Basic attributes
-        quint32 id_;
+        quint32 request_number_;
         int type_;
+};
+
+class SimpleRequest : public Request
+{
+    public:
+      // TODO: change type enum type
+        ~SimpleRequest();
+
+        virtual bool IsValidDestination(QNode node);
+        virtual void Update() = 0;
+
+        QNode get_destination() { return *destination_; };
+
+    private:
         QNode* destination_;
-        FindRequest* parent_; // Observer
-        QObject* manager_; // Observer
-
-        // Optional Data Field for requested/specified resource
-        QKey* resource_key_;
 };
 
-class PingRequest : public Request
+class PingRequest : public SimpleRequest
 {
     public:
-        PingRequest(QNode dest, QObject* manager, FindRequest* parent = NULL);
+        PingRequest(quint32 request_number, QNode dest);
 };
 
-class StoreRequest : public Request
+class StoreRequest : public SimpleRequest
 {
     public:
-        StoreRequest(QNode dest, QKey key, QObject* manager,
-            FindRequest* parent = NULL);
+        StoreRequest(quint32 request_number, QNode dest, QKey key);
         ~StoreRequest();
+
+        QKey get_resource_key() { return *resource_key_; };
+
+    private:
+        QKey* resource_key_;
 };
 
 class FindRequest : public Request
 {
     public:
-        FindRequest(int type, QNode dest, QKey key, QObject* manager,
-            FindRequest* parent = NULL);
         ~FindRequest();
 
-        Request* get_child(child_id) { return children_->value(child_id); };
+        virtual bool IsValidDestination(QNode node);
+        bool ResultsSortOrder(const QBitArray& a1, const QBitArray& a2);
+        virtual void Update() = 0;
+        virtual QNodeList Update(QNodeList nodes);
+
+        QNodeList get_destinations() { return *destinations_; };
         QNodeList get_results() { return *results_; };
 
-        virtual void Update(QNodeList nodes);
-
-        // Child management
-        void MakeChild(QNode dest);
-        void ProcessChildCompletion(quint32 child_id);
-        void RemoveChild(quint32 child_id);
-
     protected:
-        QHash<quint32, Request*>* children_;
+        QNodeList* destinations_;
         QNodeList* results_;
 };
 
 class FindNodeRequest : public FindRequest
 {
     public:
-        FindNodeRequest(QNode dest, QKey key, QObject* manager,
-            FindRequest* parent = NULL);
+        FindNodeRequest(quint32 request_number, QNodeList destinations,
+            QNodeId id);
+        ~FindNodeRequest();
 
-        virtual void ProcessChildCompletion(quint32 child_id)
+        QNodeId get_requested_node_id() { return *requested_node_id_; };
+
+    private:
+        QNodeId* requested_node_id_;
 };
 
 class FindValueRequest : public FindRequest
 {
     public:
-        FindValueRequest(QNode dest, QKey key, QObject* manager,
-            FindRequest* parent = NULL);
+        FindValueRequest(quint32 request_number, QNodeList destinations
+            QKey key);
+        ~FindValueRequest();
 
-        virtual void ProcessChildCompletion(quint32 child_id);
+        QNodeId get_requested_key() { return *requested_key_; };
+        bool set_found_value(bool found) { found_value_ = found; };
+        bool get_found_value() { return found_value_; };
+
+    private:
+        QKey* requested_key_;
+        bool found_value_;
 };
 
 #endif // KADEMLIA_REQUEST_HH

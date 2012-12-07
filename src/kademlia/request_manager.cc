@@ -39,108 +39,21 @@ void RequestManager::RequestManager::Init(QNodeAddress bootstrap_address)
     }
 }
 
-quint16 RequestManager::Bucket(QKey key)
+////////////////////////////////////////////////////////////////////////////////
+// Kademlia State Management
+
+void RequestManager::UpdateBuckets(QNode node)
 {
-    QBitArray dist = Distance(node_id_, key);
+    if (node.first == QString(node_id_.constData())) return;
 
-    quint16 bucket;
-    for (bucket = dist.size() - 1; !dist[bucket]; bucket--); // Find MSB
+    quint16 b = Bucket(node.first);
 
-    return bucket;
-}
+    int i = buckets_[b]->indexOf(node);
+    if (i > 0) buckets_[b]->removeAt(i);
 
-// TODO: verify that responded from right node
-void RequestManager::UpdateRequest(quint32 request_id, QNodeList nodes)
-{
-    qDebug() << "Updating request: " << request_id;
-    QNodeList::iterator i;
-    for (i = nodes.begin(); i != nodes.end(); i++) {
-        UpdateBuckets(*i);
-    }
-
-    // Delete the source node if it exists
-    for (i = nodes.begin(); i != nodes.end(); i++) {
-        if (i->first == QString(node_id_.constData())) {
-            nodes.erase(i);
-            break;
-        }
-    }
-
-    Request* req;
-    if ((req = Request::Get(request_id))) {
-        req->UpdateResults(nodes); // Works for PING
-    }
-    qDebug() << "Request Updated";
-}
-
-// FIXME: Timers
-// FIXME:
-void RequestManager::CloseRequest(quint32 request_id)
-{
-    Request* request = requests_->value(request_id);
-    if (request) {
-
-        // De-register request
-        request->removeAll(request_id);
-        delete req;
-      // TODO: do I need to worry about children??
-    }
-    // FIXME: need to deregister with parent and also, need to kill parents for
-    // FIND_VALUE
-
-    //     // Close Parent
-    //     if (req->get_parent()) {
-    //         CloseRequest(req->get_parent()->get_id());
-    //     }
-
-}
-
-void RequestManager::InitiateRequest(quint32 request_id, Request* request)
-{
-    requests_->insert(request_id, request);
-    emit HasRequest(request->get_type(), request->get_id(),
-        request->get_destination(),
-        request->get_requested_key());
-}
-
-void RequestManager::IssueStore(QKey key)
-{
-    QNodeList closest = ClosestNodes(key, 1);
-
-    if (closest.isEmpty()) return; // This node is supposed to store it
-
-    QNode node = closest.takeFirst();
-    StoreRequest* req = new StoreRequest(node, key, this);
-}
-
-// TODO: DRY
-void RequestManager::IssueFindNode(QNodeId id)
-{
-    QNodeList closest = ClosestNodes(id);
-
-    if (closest.isEmpty()) return; // This node is supposed to store it
-
-    QNodeList::const_iterator i = closest.constBegin();
-    // Choose one arbitrarily to be the parent
-    FindNodeRequest* parent = new FindNodeRequest(*i, id, this);
-    for (i += 1; i != closest.constEnd(); i++) {
-        parent->MakeChild(*id);
-    }
-}
-
-void RequestManager::IssueFindValue(QNodeId id)
-{
-    QNodeList closest = ClosestNodes(id);
-
-    if (closest.isEmpty()) return; // This node is supposed to store it
-    // FIXME: Emit node found
-
-    QNodeList::const_iterator i = closest.constBegin();
-    // Choose one arbitrarily to be the parent
-    FindValueRequest* parent = new FindValueRequest(*i, id, this);
-    for (i += 1; i != closest.constEnd(); i++) {
-        parent->MakeChild(*id);
-    }
+    // TODO: PING procedure
+    buckets_[b]->append(node);
+    qDebug() << "Updating bucket" << b << " with node " << node;
 }
 
 QNodeList RequestManager::ClosestNodes(QKey key, quint16 num)
@@ -180,16 +93,227 @@ void RequestManager::RefreshBucket(quint16 bucket)
 //     new PingRequest(random_node_id);
 }
 
-void RequestManager::UpdateBuckets(QNode node)
+////////////////////////////////////////////////////////////////////////////////
+// Private Helpers
+
+quint32 RequestManager::RandomId()
 {
-    if (node.first == QString(node_id_.constData())) return;
-
-    quint16 b = Bucket(node.first);
-
-    int i = buckets_[b]->indexOf(node);
-    if (i > 0) buckets_[b]->removeAt(i);
-
-    // TODO: PING procedure
-    buckets_[b]->append(node);
-    qDebug() << "Updating bucket" << b << " with node " << node;
+    quint32 request_id = (quint32) qrand();
+    while (request_id != 0 && (requests_->value(request_id)) != NULL) {
+        request_id = (quint32) qrand();
+    }
+    return request_id;
 }
+
+quint32 RequestManager::RandomRequestNumber()
+{
+    quint32 request_number = (quint32) qrand();
+    while ((request_number_to_id_map_->value(request_number)) != 0) {
+        request_number = (quint32) qrand();
+    }
+    return request_number;
+}
+
+quint32 RequestManager::LookupRequestId(quint32 request_number)
+{
+    return id_map_->value(request_number); // TODO: default val = 0?
+}
+
+quint16 RequestManager::Bucket(QKey key)
+{
+    QBitArray dist = Distance(node_id_, key);
+
+    quint16 bucket;
+    for (bucket = dist.size() - 1; !dist[bucket]; bucket--); // Find MSB
+
+    return bucket;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Kademlia RPCs
+
+void RequestManager::IssuePing(QNodeId node_id)
+{
+    quint32 request_id = RandomId();
+    quint32 request_number = RandomRequestNumber();
+
+    PingRequest* ping = new PingRequest(node_id);
+    requests_->insert(request_id, ping);
+    request_number_to_id_map_->insert(request_number, request_id);
+
+    emit HasRequest(ping->get_type(), request_number, ping->get_destination())
+}
+
+void RequestManager::IssueStore(QKey key)
+{
+    QNodeList closest = ClosestNodes(key, 1);
+    if (closest.isEmpty()) return; // This node is supposed to store it
+    QNode dest = closest.takeFirst();
+
+    quint32 request_id = RandomId();
+    quint32 request_number = RandomRequestNumber();
+
+    StoreRequest* store = new StoreRequest(dest, key);
+    requests_->insert(request_id, store);
+    request_number_to_id_map_->insert(request_number, request_id);
+
+    emit HasRequest(store->get_type(), request_number,
+        store->get_destination(), store->get_requested_key());
+}
+
+// TODO: DRY
+void RequestManager::IssueFindNode(QNodeId id)
+{
+    QNodeList closest = ClosestNodes(id);
+    if (closest.isEmpty()) return; // This node is supposed to store it
+
+    quint32 request_id = RandomId();
+
+    FindNodeRequest* find_node = new FindNodeRequest(closest, id);
+    requests_->insert(request_id, find_node);
+
+    QNodeList::const_iterator d;
+    QNodeList destinations = find_node->get_destinations();
+    for (d = destinations.constBegin(); d != destinations.constEnd(); d++) {
+        quint32 request_number = RandomRequestNumber();
+        request_number_to_id_map_->insert(request_number, request_id);
+
+        emit HasRequest(find_node->get_type(), request_number, *d,
+            find_node->get_requested_node_id());
+    }
+}
+
+void RequestManager::IssueFindValue(QKey key)
+{
+    QNodeList closest = ClosestNodes(key);
+    if (closest.isEmpty()) {
+        HandleMissingResource(key);
+        return;
+    }
+
+    quint32 request_id = RandomId();
+
+    FindValueRequest* find_value = new FindValueRequest(id);
+    requests_->insert(request_id, find_value);
+
+    QNodeList::const_iterator d;
+    QNodeList destinations = find_value->get_destinations();
+    for (d = destinations.constBegin(); d != destinations.constEnd(); d++) {
+        quint32 request_number = RandomRequestNumber();
+        request_number_to_id_map_->insert(request_number, request_id);
+
+        emit HasRequest(find_value->get_type(), request_number, *d,
+            find_node->get_requested_key());
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Request Management
+
+void RequestManager::UpdateRequest(quint32 request_number, QNode destination)
+{
+
+    quint32 request_id = request_number_to_id_map_->value(request_number);
+    Request* request = requests_->value(request_id);
+    if (!request) {
+        qDebug() << "Could not find request for request number: " <<
+            request_number;
+        return;
+    }
+
+    if (!request->IsValidDestination(destination)) {
+        qDebug() << "Incorrect node replied to request";
+        return;
+    }
+
+    switch (request->get_type()) {
+        case PING:
+            // TODO: see if anything pending
+        case STORE:
+            requests_->remove(request_id);
+            request_number_to_id_map_->remove(request_number);
+            delete request;
+            break;
+        case FIND_VALUE: // TODO: this is hack-y for now
+            ((FindValueRequest*)request)->set_found_value(true);
+            HandleFoundValue(destination,
+                ((FindValueRequest*)request)->get_requested_key();
+            break;
+        case FIND_NODE: // No-op
+            break;
+        default:
+            ERROR("Did not recognize request type");
+            break;
+    }
+}
+
+// TODO: destination -> from_node/responding_node
+void RequestManager::UpdateRequest(quint32 request_number, QNode destination,
+    QNodeList nodes)
+{
+    quint32 request_id = request_number_to_id_map_->value(request_number);
+    Request* request = requests_->value(request_id);
+    if (!request) {
+        qDebug() << "Could not find request for request number: " <<
+            request_number;
+        return;
+    }
+
+    if (!request->IsValidDestination(destination)) {
+        qDebug() << "Incorrect node replied to request";
+        return;
+    }
+
+    // Update buckets. Delete the source node if it exists
+    QNodeList::iterator i;
+    for (i = nodes.begin(); i != nodes.end(); i++) {
+        if (i->first == QString(node_id_.constData())) {
+            i = nodes.erase(i) - 1;
+        } else {
+            UpdateBuckets(*i);
+        }
+    }
+
+    FindRequest* find_request = dynamic_cast<FindRequest*>request;
+    if (!find_request) return;
+
+    QNodeList new_destinations = find_request->UpdateResults(destination, nodes);
+
+    // Issue requests for any new destinations
+    QNodeList::const_iterator d;
+    for (d = new_destinations.constBegin(); d != new_destinations.constEnd();
+            d++) {
+        quint32 request_number = RandomRequestNumber();
+        request_number_to_id_map_->insert(request_number, request_id);
+
+        if (find_request->get_type() == FIND_NODE) {
+            emit HasRequest(find_node->get_type(), request_number, *d,
+                ((FindNodeRequest*)find_node)->get_requested_node_id());
+        } else {
+            emit HasRequest(find_node->get_type(), request_number, *d,
+                ((FindValueRequest*)find_node)->get_requested_key());
+        }
+    }
+
+    // If there are no more requests outstanding, close the request
+    if (find_request->get_destinations.isEmpty()) {
+        requests_->remove(request_id);
+        request_number_to_id_map_->remove(request_number);
+        if (find_request->get_type() == FIND_VALUE &&
+                ((FindValueRequest*)find_request)->get_found_value() == false) {
+            HandleMissingResource(request->get_requested_key());
+        }
+        delete request;
+    }
+}
+
+// TODO: verify that responded from right node
+void RequestManager::UpdateRequest(quint32 request_id, QNodeList nodes)
+{
+    Request* req;
+    if ((req = Request::Get(request_id))) {
+        req->UpdateResults(nodes); // Works for PING
+    }
+    qDebug() << "Request Updated";
+}
+//FIXME: timers

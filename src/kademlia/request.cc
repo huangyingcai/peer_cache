@@ -2,80 +2,34 @@
 #include "includes.hh"
 #include "request.hh"
 
-quint32 Request::RandomId()
-{
-    static bool initialized = false;
-    if (!initialized) {
-        qsrand(QTime::currentTime().msec());
-        initialized = true;
-    }
-    return qrand();
-}
+#include <QtAlgorithm>
 
-// void Request::RegisterRequest(quint32 id, Request* req)
-// {
-//     requests_->insert(id, req); // Add to list of all requests
-//     qDebug() << requests_->keys().size() << " requests remaining";
-// }
-// 
-// void Request::RemoveRequest(quint32 id, Request* req)
-// {
-//     qDebug() << "Request: " << id << " closed";
-//     requests_->remove(id);
-//     qDebug() << requests_->keys().size() << " requests remaining";
-// }
+// Simple Request
 
-
-// Base class Implementation
-
-Request::Request(int type, QNode dest, QObject* manager,
-    FindRequest* parent) : type_(type), parent_(parent), manager_(manager),
-                       resource_key_(NULL)
-{
-    qDebug() << "Initializing a new request" << id_;
-
-    id_ = Request::RandomId();
-    destination_ = new QPair<QNodeId, QNodeAddress>(dest.first, dest.second);
-
-    manager_->InitiateRequest(id_, this);
-}
-
-Request::~Request()
+SimpleRequest::~SimpleRequest()
 {
     delete destination_;
 }
 
-
-void Request::Update(QNodeList nodes)
+bool SimpleRequest::IsValidDestination(QNode node)
 {
-    qDebug() << "Updating request: " << id_;
-    Terminate();
-}
-
-void Request::Terminate()
-{
-    qDebug() << "Terminating request" << id_;
-
-    if (parent_) {
-        parent->ProcessChildCompletion(id_);
-    }
-
-    manager_->CloseRequest(id_); // TODO: might be obviated
-    // TODO: Use for when FindValue request terminates with success, etc
+    return destination_.second == node.second;
 }
 
 // PingRequest
 
-// FIXME: interface for RequestManager?  or Request manager??? -- signals, etc
-PingRequest::PingRequest(QNode dest, QObject* manager,
-    Request* parent) : Request(PING, dest, manager, parent) {}
+PingRequest::PingRequest(quint32 request_number, QNode dest) :
+    request_number_(request_number), type_(PING)
+{
+    destination_ = new QNode(dest.first, dest.second);
+}
 
 // StoreRequest
 
-StoreRequest::StoreRequest(QNode dest, QKey key,
-    QObject* manager, Request* parent) :
-    Request(STORE, dest, manager, parent)
+StoreRequest::StoreRequest(quint32 request_number, QNode dest, QKey key) :
+    request_number_(request_number), type_(STORE)
 {
+    destination_ = new QNode(dest.first, dest.second);
     resource_key_ = new QKey(key);
 }
 
@@ -86,128 +40,79 @@ StoreRequest::~StoreRequest()
 
 // FindRequest
 
-FindRequest::FindRequest(int type, QNode dest, QKey key,
-    QObject* manager, Request* parent) :
-    Request(type, dest, manager, parent)
-{
-    resource_key_ = new QKey(key);
-    results_ = new QNodeList();
-}
-
 FindRequest::~FindRequest()
 {
-    delete resource_key_;
+    delete destinations_;
     delete results_;
 }
 
-void FindRequest::Update(QNodeList nodes)
+bool FindRequest::IsValidDestination(QNode node);
 {
-    if (parent_) { // it's a child
-        results_ = QNodeList(nodes);
-        Terminate();
-    } else { // it's a parent
-        QNodeList sorted;
-        // TODO: DRY; qsort?
-        if (!nodes.isEmpty()) {
-            // Basic insertion sort (okay because n is small)
-            sorted << nodes.takeFirst();
-            while (!nodes.isEmpty()) {
-                QNode cur_node = nodes.takeFirst();
-                QBitArray cur_dist = Distance(cur_node.first,
-                    *resource_key_);
+    QNodeList::const_iterator dest;
+    for (dest = destinations_.constBegin(); dest != destinations_.constEnd();
+            dest++) {
+        if (dest->second == node.second) return true;
+    }
+    return false;
+}
 
-                QNodeList::iterator i;
-                for (i = sorted.begin(); i != sorted.end(); i++) {
-                    QBitArray dist =
-                        Distance(i->first, *resource_key_);
-                    // TODO: fix spacing
-                    if (cur_dist > dist) break;
-                }
-                sorted.insert(i, cur_node);
-            }
-        }
+bool FindRequest::ResultsSortOrder(const QNode& n1, constQNode& n2)
+{
+    QBitArray a1 = Distance(n1.first, *resource_key_);
+    QBitArray a2 = Distance(n2.first, *resource_key_);
+    for (int i = 0; i < kKeyLength * 8; i++) {
+        if (a1[i] > a2[i]) return true;
+        if (a1[i] < a2[i]) return false;
+    }
+    return false;
+}
 
-        // TODO: qBinaryFind?
-        QNodeList::iterator i, j;
-        for (i = sorted.begin(); i != sorted.end(); i++) {
-            if (results_->indexOf(*i) > 0) continue;
-            if (results_->size() < kBucketSize) {
-                results_->append(*i);
-                MakeChild(*i);
-            } else {
-                for (j = results_->begin(); j != results_->end(); j++) {
-                    QBitArray new_dist =
-                        Distance(i->first, *resource_key_);
-                    QBitArray dist =
-                        Distance(j->first, *resource_key_);
-                    if (new_dist > dist) {
-                        results_->insert(j, *i);
-                        results_->removeLast();
-                        MakeChild(*i);
-                        break;
-                    }
+QNodeList FindRequest::Update(QNodeList nodes)
+{
+    qsort(nodes, ResultsSortOrder);
+
+    QNodeList new_destinations();
+    QNodeList::iterator i, j;
+    for (i = sorted.begin(); i != sorted.end(); i++) {
+        if (results_->indexOf(*i) > 0) continue;
+        if (results_->size() < kBucketSize) {
+            results_->append(*i);
+            new_destinations <<  *i;
+        } else {
+            for (j = results_->begin(); j != results_->end(); j++) {
+                QBitArray new_dist =
+                    Distance(i->first, *resource_key_);
+                QBitArray dist =
+                    Distance(j->first, *resource_key_);
+                if (new_dist > dist) {
+                    results_->insert(j, *i);
+                    results_->removeLast();
+                    new_destinations <<  *i;
+                    break;
                 }
             }
         }
-        if (children_->isEmpty()) emit Complete(id_);
     }
-}
-
-
-void FindRequest::MakeChild(QNode dest)
-{
-    Request* child;
-    if (type_ == FIND_NODE) {
-        child = new FindNodeRequest(dest, *resource_key_, manager_, this);
-    } else { // FIND_VALUE
-        child = new FindValueRequest(dest, *resource_key_, manager_, this);
-    }
-    children_->insert(child->get_id(), child);
-}
-
-void FindRequest::ProcessChildCompletion(quint32 child_id)
-{
-    Request* child = get_child(child_id);
-    if (child) {
-        if (child->get_type() == FIND_NODE || child->get_type() == FIND_VALUE) {
-            QNodeList child_results = ((FindRequest*)child)->get_results();
-            Update(child_results);
-            children_->removeAll(child_id);
-        } else if (child->get_type() == PING) {
-            manager->InitiateRequest(this);
-        }
-        RemoveChild(child_id);
-    }
-}
-
-void FindRequest::RemoveChild(quint32 child_id)
-{
-    children->removeAll(id);
+    return new_destinations;
 }
 
 // Find Node Request
 
-FindNodeRequest::FindNodeRequest(QNode dest, QKey key,
-    QObject* manager, Request* parent) :
-    FindRequest(FIND_NODE, dest, key, manager, parent) {}
-
-void FindNodeRequest::ProcessChildCompletion(quint32 child_id)
+FindNodeRequest::FindNodeRequest(quint32 request_number, QNodeList destinations,
+    QNodeId id) : request_number_(request_number), type_(FIND_NODE)
 {
-    FindRequest::ProcessChildCompletion(child_id);
-    if (children_->isEmpty()) Terminate();
+    destinations_ = new QNodeList(destinations);
+    results_ = new QNodeList();
+    requested_node_id_ = new QNodeId(id);
 }
 
 // Find Value Request
 
-FindValueRequest::FindValueRequest(QNode dest, QKey key,
-    QObject* manager, Request* parent) :
-    FindRequest(FIND_VALUE, dest, key, manager, parent) {}
-
-void FindValueRequest::ProcessChildCompletion(quint32 child_id)
+FindValueRequest::FindValueRequest(quint32 request_number,
+    QNodeList destinations, QKey key) : request_number_(request_number_),
+    type_(FIND_VALUE), found_value_(false)
 {
-    FindRequest::ProcessChildCompletion(child_id);
-    if (children_->isEmpty()) {
-        manager->HandleMissingResource(*resource_key_);
-        Terminate();
-    }
+    destinations_ = new QNodeList(destinations);
+    results_ = new QNodeList();
+    requested_key_ = new QKey(key);
 }

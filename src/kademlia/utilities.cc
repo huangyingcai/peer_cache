@@ -3,11 +3,11 @@
 
 #include <QBitArray>
 
-bool operator>(QBitArray& a1, QBitArray& a2)
+bool operator<(QBitArray& a1, QBitArray& a2)
 {
     for (int i = 0; i < kKeyLength * 8; i++) {
-        if (a1[i] > a2[i]) return true;
-        if (a1[i] < a2[i]) return false;
+        if (a1[i] < a2[i]) return true;
+        if (a1[i] > a2[i]) return false;
     }
     return false;
 }
