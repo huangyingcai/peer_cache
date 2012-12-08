@@ -9,21 +9,43 @@ DataServer::DataServer()
     qDebug() << "Data Server connection on " << p;
     connect(this, SIGNAL(newConnection()), this,
         SLOT(AcceptIncomingConnection()));
+
+    files_ = new QHash<QKey, QFile*>();
+    pending_downloads_ = new QHash<QTcpSocket*, QKey>*();
+    in_progress_downloads_ = new QHash<QTcpSocket*, Download*>();
 }
 
-// TODO: DataServer::~DataServer()
-// {
-//     // Close and free each thing in files_.values
-// }
-
-void DataServer::Store(QKey key, QFile* file)
+DataServer::~DataServer()
 {
-    files_.insert(key, file);
+    QList<QFile*>::iterator file_pointer;
+    for (file_pointer = files_->values().begin();
+            file_pointer = files_->values().end(); file_pointer++) {
+        delete *file_pointer;
+    }
+    delete files_;
+    delete pending_downloads_;
+    QList<Download*>::iterator download_pointer;
+    for (download_pointer = in_progress_downloads_->values().begin();
+            download_pointer = in_progress_downloads_->values().end();
+            download_pointer++) {
+        delete *download_pointer;
+    }
+    delete in_progress_downloads_;
+    // Close and free each thing in files_.values
 }
+
+void DataServer::Store(QKey key, QFile* file) // TODO: QIODEvice??:vs
+{
+    files_->insert(key, file);
+}
+
+// FIXME: when connecting to cache, just need to keep map of
+// QKey->QUrl, and call super.data(url), etc; let it deal with insertion and
+// such
 
 QFile* DataServer::Value(QKey key)
 {
-    return files_.value(key, NULL);
+    return files_->value(key, NULL);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -90,8 +112,8 @@ void DataServer::RequestDownload()
     QKey key = pending_downloads_->value(connection);
     pending_downloads_->remove(connection);
 
-    Download dl(key);
-    in_progress_downloads_->insert(connection, dl);
+    Download* new_download = new Download(key);
+    in_progress_downloads_->insert(connection, new_download);
     connect(connection, SIGNAL(readyRead()), this, SLOT(ProcessDownload()));
 
     QByteArray block;
@@ -103,51 +125,46 @@ void DataServer::RequestDownload()
 void DataServer::ProcessDownload()
 {
     QTcpSocket* connection = (QTcpSocket*) QObject::sender();
-    Download download = in_progress_downloads_->value(connection);
+    Download* download = in_progress_downloads_->value(connection);
 
     QDataStream in(connection);
-    if (download.get_size() == 0) {
+    if (download->get_size() == 0) {
         if (connection->bytesAvailable() < (int) sizeof(quint32)) return;
         quint64 s;
         in >> s;
-        download.set_size(s);
+        download->set_size(s);
     }
 
     char buffer[kBufferSize];
-    while (connection->bytesAvailable() && !download.Complete()) {
+    while (connection->bytesAvailable() && !download->Complete()) {
         quint64 bytes_read = connection->read(buffer, kBufferSize);
-        download.Write(buffer, bytes_read);
+        download->Write(buffer, bytes_read);
     }
 
-    if (download.Complete()) {
-        if (download.get_bytes_read() == download.get_size()) {
-            Store(download.get_key(), download.get_file());
+    if (download->Complete()) {
+        if (download->get_bytes_read() == download->get_size()) {
+            Store(download->get_key(), download->get_file());
         }
+        delete download;
         in_progress_downloads_->remove(connection);
         connection->close();
-    } else {
-        in_progress_downloads_->insert(connection, download);
     }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // Download
 
-DataServer::Download::Download() {}
-
 DataServer::Download::Download(QKey key) : size_(0), bytes_read_(0)
 {
-    key_ = key;
+    key_ = new QKey(key);
     file_ = new QFile(QString(key.constData())); // TODO: error handling
     file_->open(QIODevice::ReadWrite);
 }
 
-DataServer::Download::Download(const Download& other)
+DataServer::Download::~Download()
 {
-    key_ = other.key_;
-    file_ = other.file_;
-    size_ = other.size_;
-    bytes_read_ = other.bytes_read_;
+    delete key_;
+    delete file_;
 }
 
 void DataServer::Download::Write(char* buff, quint64 num_bytes)

@@ -18,6 +18,7 @@ class DataServer : public QTcpServer
         // Data transmission
         void AcceptIncomingConnection();
         void ProcessDownloadRequest();
+
         void InitiateDownload(QNodeAddress addr, quint32 request_id, QKey key);
         void RequestDownload();
         void ProcessDownload();
@@ -26,14 +27,13 @@ class DataServer : public QTcpServer
         const static quint16 kDefaultPort = 42600;
         const static quint64 kBufferSize = 1024;
 
-        QHash<QKey, QFile*> files_; //  FIXME*
+        QHash<QKey, QFile*> files_*;
 
         class Download
         {
             public:
                 Download();
                 Download(QKey key);
-                Download(const Download& other);
 
                 quint64 get_size() { return size_; };
                 void set_size(quint32 s) { size_ = s; };
@@ -45,15 +45,15 @@ class DataServer : public QTcpServer
                 void Write(char* buff, quint64 num_bytes);
 
             private:
-                QKey key_; // FIXME *
-                QFile* file_; // Never freed
+                QKey* key_;
+                QFile* file_;
                 quint64 size_;
                 quint64 bytes_read_;
 
         };
 
         QHash<QTcpSocket*, QKey>* pending_downloads_;
-        QHash<QTcpSocket*, Download>* in_progress_downloads_;
+        QHash<QTcpSocket*, Download*>* in_progress_downloads_;
 
         // TODO: command line option to specify where to save data/location of
         // browser cache -- iterate over all files and add them to cache on
