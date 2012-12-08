@@ -14,8 +14,7 @@ class RequestManager : public QObject
     Q_OBJECT
 
     public:
-
-        RequestManager(QNodeId id, QObject* parent = 0);
+        RequestManager(QNodeId id);
         ~RequestManager();
         // Must be called before Issue*() commands
         // Initialization that must occur after signals and slots are set up
@@ -27,7 +26,7 @@ class RequestManager : public QObject
         QList<QNode> ClosestNodes(QKey key, quint16 num = kBucketSize);
 
         // Kademlia RPCs
-        void IssuePing(QNodeId id);
+        void IssuePing(QNode node);
         void IssueStore(QKey key);
         void IssueFindNode(QNodeId id);
         void IssueFindValue(QKey key);
@@ -49,7 +48,7 @@ class RequestManager : public QObject
     private:
         bool initialized_;
         QNodeId* node_id_;
-        QVector<QNodeList*>* buckets_;
+        QNodeList** buckets_;
         QHash<quint32, Request*>* requests_; // Map of internal request id to
                                              // request
         QHash<quint32, quint32>* request_number_to_id_map_; // Map of external request

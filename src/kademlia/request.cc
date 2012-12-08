@@ -2,7 +2,7 @@
 #include "includes.hh"
 #include "request.hh"
 
-#include <QtAlgorithm>
+#include <QtAlgorithms>
 
 // Simple Request
 
@@ -13,21 +13,19 @@ SimpleRequest::~SimpleRequest()
 
 bool SimpleRequest::IsValidDestination(QNode node)
 {
-    return destination_.second == node.second;
+    return destination_->second == node.second;
 }
 
 // PingRequest
 
-PingRequest::PingRequest(quint32 request_number, QNode dest) :
-    request_number_(request_number), type_(PING)
+PingRequest::PingRequest(QNode dest) : type_(PING)
 {
     destination_ = new QNode(dest.first, dest.second);
 }
 
 // StoreRequest
 
-StoreRequest::StoreRequest(quint32 request_number, QNode dest, QKey key) :
-    request_number_(request_number), type_(STORE)
+StoreRequest::StoreRequest(QNode dest, QKey key) : type_(STORE)
 {
     destination_ = new QNode(dest.first, dest.second);
     resource_key_ = new QKey(key);
@@ -46,7 +44,7 @@ FindRequest::~FindRequest()
     delete results_;
 }
 
-bool FindRequest::IsValidDestination(QNode node);
+bool FindRequest::IsValidDestination(QNode node)
 {
     QNodeList::const_iterator dest;
     for (dest = destinations_.constBegin(); dest != destinations_.constEnd();
@@ -56,7 +54,7 @@ bool FindRequest::IsValidDestination(QNode node);
     return false;
 }
 
-bool FindRequest::ResultsSortOrder(const QNode& n1, constQNode& n2)
+bool FindRequest::ResultsSortOrder(const QNode& n1, const QNode& n2)
 {
     QBitArray a1 = Distance(n1.first, *resource_key_);
     QBitArray a2 = Distance(n2.first, *resource_key_);
@@ -67,17 +65,19 @@ bool FindRequest::ResultsSortOrder(const QNode& n1, constQNode& n2)
     return false;
 }
 
-QNodeList FindRequest::Update(QNodeList nodes)
+QNodeList FindRequest::Update(QNode destination, QNodeList nodes)
 {
+    destinations_->remove(destination);
     qsort(nodes, ResultsSortOrder);
 
-    QNodeList new_destinations();
+    QNodeList new_destinations = QNodeList();
     QNodeList::iterator i, j;
-    for (i = sorted.begin(); i != sorted.end(); i++) {
+    for (i = nodes.begin(); i != nodes.end(); i++) {
         if (results_->indexOf(*i) > 0) continue;
         if (results_->size() < kBucketSize) {
             results_->append(*i);
-            new_destinations <<  *i;
+            new_destinations.append(*i);
+            destinations_->append(*i);
         } else {
             for (j = results_->begin(); j != results_->end(); j++) {
                 QBitArray new_dist =
@@ -87,7 +87,8 @@ QNodeList FindRequest::Update(QNodeList nodes)
                 if (new_dist > dist) {
                     results_->insert(j, *i);
                     results_->removeLast();
-                    new_destinations <<  *i;
+                    new_destinations.append(*i);
+                    destinations_->append(*i);
                     break;
                 }
             }
@@ -98,8 +99,8 @@ QNodeList FindRequest::Update(QNodeList nodes)
 
 // Find Node Request
 
-FindNodeRequest::FindNodeRequest(quint32 request_number, QNodeList destinations,
-    QNodeId id) : request_number_(request_number), type_(FIND_NODE)
+FindNodeRequest::FindNodeRequest(QNodeList destinations, QNodeId id) :
+    type_(FIND_NODE)
 {
     destinations_ = new QNodeList(destinations);
     results_ = new QNodeList();
@@ -108,8 +109,7 @@ FindNodeRequest::FindNodeRequest(quint32 request_number, QNodeList destinations,
 
 // Find Value Request
 
-FindValueRequest::FindValueRequest(quint32 request_number,
-    QNodeList destinations, QKey key) : request_number_(request_number_),
+FindValueRequest::FindValueRequest(QNodeList destinations, QKey key) :
     type_(FIND_VALUE), found_value_(false)
 {
     destinations_ = new QNodeList(destinations);

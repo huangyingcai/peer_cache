@@ -10,11 +10,9 @@ class Request
         virtual bool IsValidDestination(QNode node) = 0;
         virtual void Update() = 0;
 
-        quint32 get_request_number() { return request_number_; };
         int get_type() { return type_; };
 
     protected:
-        quint32 request_number_;
         int type_;
 };
 
@@ -29,21 +27,25 @@ class SimpleRequest : public Request
 
         QNode get_destination() { return *destination_; };
 
-    private:
+    protected:
         QNode* destination_;
 };
 
 class PingRequest : public SimpleRequest
 {
     public:
-        PingRequest(quint32 request_number, QNode dest);
+        PingRequest(QNode dest);
+
+        virtual void Update() {};
 };
 
 class StoreRequest : public SimpleRequest
 {
     public:
-        StoreRequest(quint32 request_number, QNode dest, QKey key);
+        StoreRequest(QNode dest, QKey key);
         ~StoreRequest();
+
+        virtual void Update() {};
 
         QKey get_resource_key() { return *resource_key_; };
 
@@ -57,9 +59,9 @@ class FindRequest : public Request
         ~FindRequest();
 
         virtual bool IsValidDestination(QNode node);
-        bool ResultsSortOrder(const QBitArray& a1, const QBitArray& a2);
+        bool ResultsSortOrder(const QNode& n1, const QNode& n2);
         virtual void Update() = 0;
-        virtual QNodeList Update(QNodeList nodes);
+        virtual QNodeList Update(QNode destination, QNodeList nodes);
 
         QNodeList get_destinations() { return *destinations_; };
         QNodeList get_results() { return *results_; };
@@ -72,9 +74,10 @@ class FindRequest : public Request
 class FindNodeRequest : public FindRequest
 {
     public:
-        FindNodeRequest(quint32 request_number, QNodeList destinations,
-            QNodeId id);
+        FindNodeRequest(QNodeList destinations, QNodeId id);
         ~FindNodeRequest();
+
+        virtual void Update() {};
 
         QNodeId get_requested_node_id() { return *requested_node_id_; };
 
@@ -85,12 +88,13 @@ class FindNodeRequest : public FindRequest
 class FindValueRequest : public FindRequest
 {
     public:
-        FindValueRequest(quint32 request_number, QNodeList destinations
-            QKey key);
+        FindValueRequest(QNodeList destinations, QKey key);
         ~FindValueRequest();
 
+        virtual void Update() {};
+
         QNodeId get_requested_key() { return *requested_key_; };
-        bool set_found_value(bool found) { found_value_ = found; };
+        void set_found_value(bool found) { found_value_ = found; };
         bool get_found_value() { return found_value_; };
 
     private:

@@ -3,12 +3,10 @@
 #include "request.hh"
 #include "request_manager.hh"
 
-RequestManager::RequestManager(QNodeId id, QNodeAddress bootstrap_addr,
-    QObject* parent) : QObject(parent)
+RequestManager::RequestManager(QNodeId id) : initialized_(false)
 {
-    node_id_ = id;
-    initialized_ = false;
-    buckets_ = new QVector(kKeyLength * 8);
+    node_id_ = new QNodeId(id);
+    buckets_ = new QNodeList*[kKeyLength * 8];
     // Initialize buckets
     for (int i = 0; i < kKeyLength * 8; i++) {
         buckets_[i] = new QNodeList();
@@ -24,7 +22,7 @@ RequestManager::~RequestManager()
     for (int i = 0; i < kKeyLength * 8; i++) {
         delete buckets_[i];
     }
-    delete buckets_;
+    delete [] buckets_;
     delete requests_;
 }
 
@@ -32,9 +30,12 @@ RequestManager::~RequestManager()
 void RequestManager::RequestManager::Init(QNodeAddress bootstrap_address)
 {
     if (!initialized_) {
-        QNode node = qMakePair(QByteArray(), bootstrap_addr);
+        QNode node = qMakePair(QByteArray(), bootstrap_address);
+        QNodeList nodes;
+        nodes << node;
+        // TODO: fix this
         FindNodeRequest* req =
-            new FindNodeRequest(node, node_id_, this);
+            new FindNodeRequest(nodes, *node_id_);
         initialized_ = true;
     }
 }
@@ -44,7 +45,7 @@ void RequestManager::RequestManager::Init(QNodeAddress bootstrap_address)
 
 void RequestManager::UpdateBuckets(QNode node)
 {
-    if (node.first == QString(node_id_.constData())) return;
+    if (node.first == QString(node_id_->constData())) return;
 
     quint16 b = Bucket(node.first);
 
@@ -114,14 +115,9 @@ quint32 RequestManager::RandomRequestNumber()
     return request_number;
 }
 
-quint32 RequestManager::LookupRequestId(quint32 request_number)
-{
-    return id_map_->value(request_number); // TODO: default val = 0?
-}
-
 quint16 RequestManager::Bucket(QKey key)
 {
-    QBitArray dist = Distance(node_id_, key);
+    QBitArray dist = Distance(*node_id_, key);
 
     quint16 bucket;
     for (bucket = dist.size() - 1; !dist[bucket]; bucket--); // Find MSB
@@ -132,16 +128,16 @@ quint16 RequestManager::Bucket(QKey key)
 ////////////////////////////////////////////////////////////////////////////////
 // Kademlia RPCs
 
-void RequestManager::IssuePing(QNodeId node_id)
+void RequestManager::IssuePing(QNode node)
 {
     quint32 request_id = RandomId();
     quint32 request_number = RandomRequestNumber();
 
-    PingRequest* ping = new PingRequest(node_id);
+    PingRequest* ping = new PingRequest(node);
     requests_->insert(request_id, ping);
     request_number_to_id_map_->insert(request_number, request_id);
 
-    emit HasRequest(ping->get_type(), request_number, ping->get_destination())
+    emit HasRequest(ping->get_type(), request_number, ping->get_destination());
 }
 
 void RequestManager::IssueStore(QKey key)
@@ -158,7 +154,7 @@ void RequestManager::IssueStore(QKey key)
     request_number_to_id_map_->insert(request_number, request_id);
 
     emit HasRequest(store->get_type(), request_number,
-        store->get_destination(), store->get_requested_key());
+        store->get_destination(), store->get_resource_key());
 }
 
 // TODO: DRY
@@ -169,6 +165,7 @@ void RequestManager::IssueFindNode(QNodeId id)
 
     quint32 request_id = RandomId();
 
+    // FIXME: messed up the reques_id thing
     FindNodeRequest* find_node = new FindNodeRequest(closest, id);
     requests_->insert(request_id, find_node);
 
@@ -193,7 +190,7 @@ void RequestManager::IssueFindValue(QKey key)
 
     quint32 request_id = RandomId();
 
-    FindValueRequest* find_value = new FindValueRequest(id);
+    FindValueRequest* find_value = new FindValueRequest(closest, key);
     requests_->insert(request_id, find_value);
 
     QNodeList::const_iterator d;
@@ -203,7 +200,7 @@ void RequestManager::IssueFindValue(QKey key)
         request_number_to_id_map_->insert(request_number, request_id);
 
         emit HasRequest(find_value->get_type(), request_number, *d,
-            find_node->get_requested_key());
+            find_value->get_requested_key());
     }
 }
 
@@ -236,8 +233,8 @@ void RequestManager::UpdateRequest(quint32 request_number, QNode destination)
             break;
         case FIND_VALUE: // TODO: this is hack-y for now
             ((FindValueRequest*)request)->set_found_value(true);
-            HandleFoundValue(destination,
-                ((FindValueRequest*)request)->get_requested_key();
+            // HandleFoundValue(destination,
+            //    ((FindValueRequest*)request)->get_requested_key());
             break;
         case FIND_NODE: // No-op
             break;
@@ -267,17 +264,17 @@ void RequestManager::UpdateRequest(quint32 request_number, QNode destination,
     // Update buckets. Delete the source node if it exists
     QNodeList::iterator i;
     for (i = nodes.begin(); i != nodes.end(); i++) {
-        if (i->first == QString(node_id_.constData())) {
+        if (i->first == QString(node_id_->constData())) {
             i = nodes.erase(i) - 1;
         } else {
             UpdateBuckets(*i);
         }
     }
 
-    FindRequest* find_request = dynamic_cast<FindRequest*>request;
+    FindRequest* find_request = dynamic_cast<FindRequest*>(request);
     if (!find_request) return;
 
-    QNodeList new_destinations = find_request->UpdateResults(destination, nodes);
+    QNodeList new_destinations = find_request->Update(destination, nodes);
 
     // Issue requests for any new destinations
     QNodeList::const_iterator d;
@@ -287,33 +284,23 @@ void RequestManager::UpdateRequest(quint32 request_number, QNode destination,
         request_number_to_id_map_->insert(request_number, request_id);
 
         if (find_request->get_type() == FIND_NODE) {
-            emit HasRequest(find_node->get_type(), request_number, *d,
-                ((FindNodeRequest*)find_node)->get_requested_node_id());
+            emit HasRequest(find_request->get_type(), request_number, *d,
+                ((FindNodeRequest*)find_request)->get_requested_node_id());
         } else {
-            emit HasRequest(find_node->get_type(), request_number, *d,
-                ((FindValueRequest*)find_node)->get_requested_key());
+            emit HasRequest(find_request->get_type(), request_number, *d,
+                ((FindValueRequest*)find_request)->get_requested_key());
         }
     }
 
     // If there are no more requests outstanding, close the request
-    if (find_request->get_destinations.isEmpty()) {
+    if (find_request->get_destinations().isEmpty()) {
         requests_->remove(request_id);
         request_number_to_id_map_->remove(request_number);
         if (find_request->get_type() == FIND_VALUE &&
                 ((FindValueRequest*)find_request)->get_found_value() == false) {
-            HandleMissingResource(request->get_requested_key());
+            HandleMissingResource(
+                ((FindValueRequest*)request)->get_requested_key());
         }
         delete request;
     }
 }
-
-// TODO: verify that responded from right node
-void RequestManager::UpdateRequest(quint32 request_id, QNodeList nodes)
-{
-    Request* req;
-    if ((req = Request::Get(request_id))) {
-        req->UpdateResults(nodes); // Works for PING
-    }
-    qDebug() << "Request Updated";
-}
-//FIXME: timers

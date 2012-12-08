@@ -65,16 +65,14 @@ KademliaClient::KademliaClient(QNodeAddress bootstrap_addr) : DataServer()
     connect(udp_socket_, SIGNAL(readyRead()), this,
         SLOT(ReadPendingDatagrams()));
 
-    request_manager_ = new RequestManager(node_id_, bootstrap_addr, this);
-    // Handle existing requests
-    connect(this, SIGNAL(ResponseReceived(quint32, QNodeList)),
-        request_manager_, SLOT(UpdateRequest(quint32, QNodeList)));
+    request_manager_ = new RequestManager(node_id_);
     // Issue new requests
     connect(request_manager_, SIGNAL(HasRequest(int, quint32, QNode, QKey)),
         SLOT(ProcessNewRequest(int, quint32, QNode, QKey)));
+    // TODO: Handle Resource Missing
 
     // Bootstrap process
-    request_manager_->Init();
+    request_manager_->Init(bootstrap_addr);
 }
 
 void KademliaClient::ReadPendingDatagrams()
@@ -109,9 +107,9 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
         ERROR("Invalid Source in request");
         return ;
     }
-    QNode node(source_id, addr);
-    request_manager_->UpdateBuckets(node);
-    qDebug() << "Received datagram from " << node;
+    QNode source = QNode(source_id, addr);
+    request_manager_->UpdateBuckets(source);
+    qDebug() << "Received datagram from " << source;
 
     // Handle request
     quint16 type = message.value("Type").toUInt();
@@ -126,20 +124,24 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
     QNodeList nodes;
     QNodeId id;
     switch (type) {
-    // TODO: verify response came from right node
         case PING:
             ReplyPing(addr, request_id);
             break;
         case ACK:
-            emit ResponseReceived(request_id);
+            request_manager_->UpdateRequest(request_id, source);
             break;
         case STORE:
             key = message.value("Key").toByteArray();
             if (!key.isEmpty()) {
+                // TODO: reply
                 InitiateDownload(addr, request_id, key);
+                request_manager_->UpdateRequest(request_id, source);
             } else {
                 ERROR("Improper STORE: no key");
             }
+            break;
+        case READY_DOWNLOAD:
+            // TODO add to list of expected connections
             break;
         case FIND_VALUE:
             key = message.value("Key").toByteArray();
@@ -150,15 +152,16 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
             }
             break;
         case REPLY_VALUE:
+            // TODO: Datagram ERRORS?
             key = message.value("Key").toByteArray();
             node_list = message.value("Nodes").toStringList();
             if (!key.isEmpty()) {
+                // TODO: Reply ready_download
                 InitiateDownload(addr, request_id, key);
-                request_manager_->CloseRequest(request_id); // FIXME:
+                request_manager_->UpdateRequest(request_id, source);
             } else {
-                // TODO: errors?
                 nodes = KademliaClient::DeserializeNodeStrings(node_list);
-                emit ResponseReceived(request_id, nodes);
+                request_manager_->UpdateRequest(request_id, source, nodes);
             }
             break;
         case FIND_NODE:
@@ -170,10 +173,10 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
             }
             break;
         case REPLY_NODE:
+            // TODO: Datagram ERRORS?
             node_list = message.value("Nodes").toStringList();
-            // TODO: errors?
             nodes = KademliaClient::DeserializeNodeStrings(node_list);
-            emit ResponseReceived(request_id, nodes);
+            request_manager_->UpdateRequest(request_id, source, nodes);
             break;
         default:
             qDebug() << "Dropping malformed packet";
