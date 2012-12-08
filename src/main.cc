@@ -26,6 +26,14 @@ int main(int argc, char** argv)
     quint16 port = QString(argv[2]).toUInt();
     KademliaClient* client = new KademliaClient(qMakePair(addr, port));
 
+    // while (getline()) {
+    //    QStringList commands = line.split(" ");
+    //    if (commands[0] == QString("Get")) {
+      //      Issue Find Request (QHash(resource))
+    //    } else if (commands[1] == QString("Store") {
+    //        new QFile; dataserver.store
+    //    }
+    // }
     // Enter the Qt main loop; everything else is event driven
     return app.exec();
 }
