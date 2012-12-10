@@ -37,7 +37,7 @@ class RequestManager : public QObject
             QNodeList nodes);
 
         // TODO:
-        void HandleMissingResource(QKey key); 
+        void HandleMissingResource(QKey key);
 
     public slots:
         void RefreshBucket(quint16 bucket);

@@ -59,7 +59,6 @@ class FindRequest : public Request
         ~FindRequest();
 
         virtual bool IsValidDestination(QNode node);
-        bool ResultsSortOrder(const QNode& n1, const QNode& n2);
         virtual void Update() = 0;
         virtual QNodeList Update(QNode destination, QNodeList nodes);
 
@@ -67,6 +66,7 @@ class FindRequest : public Request
         QNodeList get_results() { return *results_; };
 
     protected:
+        QByteArray* requested_key_;
         QNodeList* destinations_;
         QNodeList* results_;
 };
@@ -79,10 +79,7 @@ class FindNodeRequest : public FindRequest
 
         virtual void Update() {};
 
-        QNodeId get_requested_node_id() { return *requested_node_id_; };
-
-    private:
-        QNodeId* requested_node_id_;
+        QNodeId get_requested_node_id() { return *requested_key_; };
 };
 
 class FindValueRequest : public FindRequest
@@ -97,8 +94,7 @@ class FindValueRequest : public FindRequest
         void set_found_value(bool found) { found_value_ = found; };
         bool get_found_value() { return found_value_; };
 
-    private:
-        QKey* requested_key_;
+    protected:
         bool found_value_;
 };
 

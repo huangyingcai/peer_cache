@@ -18,6 +18,12 @@ class KademliaClient : public DataServer
         static QList<QNode> DeserializeNodeStrings(QStringList node_strings);
 
         KademliaClient(QNodeAddress bootstrap_addr);
+        ~KademliaClient();
+
+    public slots:
+        // Scaffold methods for testing kademlia implementation
+        void AddFile(QString filename);
+        void SearchForFile(QString name);
 
     protected slots:
         void ReadPendingDatagrams();
@@ -52,7 +58,7 @@ class KademliaClient : public DataServer
     protected:
         const static quint16 kDefaultPort = 42600;
 
-        QNodeId node_id_; // FIXME: also **
+        QNodeId* node_id_;
         QUdpSocket* udp_socket_;
         RequestManager* request_manager_;
 };

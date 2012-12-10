@@ -10,6 +10,7 @@ class DataServer : public QTcpServer
 
     public:
         DataServer();
+        ~DataServer();
 
         void Store(QKey key, QFile* file);
         QFile* Value(QKey key);
@@ -27,18 +28,18 @@ class DataServer : public QTcpServer
         const static quint16 kDefaultPort = 42600;
         const static quint64 kBufferSize = 1024;
 
-        QHash<QKey, QFile*> files_*;
+        QHash<QKey, QFile*>* files_;
 
         class Download
         {
             public:
-                Download();
                 Download(QKey key);
+                ~Download();
 
                 quint64 get_size() { return size_; };
                 void set_size(quint32 s) { size_ = s; };
                 quint64 get_bytes_read() { return bytes_read_; };
-                QKey get_key() { return key_; };
+                QKey get_key() { return *key_; };
                 QFile* get_file() { return file_; };
 
                 bool Complete() { return bytes_read_ >= size_; };
