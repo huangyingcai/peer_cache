@@ -304,3 +304,9 @@ void RequestManager::UpdateRequest(quint32 request_number, QNode destination,
         delete request;
     }
 }
+
+void RequestManager::HandleMissingResource(QKey key)
+{
+    qDebug() << "Method stub for RequestManager::HandleMissingResource";
+    qDebug() << "Could not find resource for key: " << key;
+}

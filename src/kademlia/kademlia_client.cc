@@ -42,10 +42,12 @@ KademliaClient::KademliaClient(QNodeAddress bootstrap_addr) : DataServer()
     for (int b = 0; b <= kKeyLength * 8; b++) {
         bits[b] = qrand() % 2;
     }
-    node_id_ = QByteArray(kKeyLength, 0);
+    // TODO: this is hacky
+    QByteArray node_id_local = QByteArray(kKeyLength, 0);
     for (int b = 0; b < bits.count(); b++) {
-        node_id_[b/8] = (node_id_.at(b / 8) | ((bits[b] ? 1 : 0) << (b % 8)));
+        node_id_local[b/8] = (node_id_local.at(b / 8) | ((bits[b] ? 1 : 0) << (b % 8)));
     }
+    node_id_ = new QByteArray(node_id_local);
     qDebug() << "Node Id is: " << node_id_;
 
     // Connect remaining signals and slots to implement asynch server
@@ -57,7 +59,7 @@ KademliaClient::KademliaClient(QNodeAddress bootstrap_addr) : DataServer()
     connect(this, SIGNAL(ReplyReady(QNodeAddress, quint32, QVariantMap)), this,
         SLOT(SendReply(QNodeAddress, quint32, QVariantMap)));
 
-    udp_socket_ = new QUdpSocket();
+    udp_socket_ = new QUdpSocket(this);
     quint16 p = kDefaultPort;
     while (!udp_socket_->bind(QHostAddress::LocalHost, p++));
     qDebug() << "Bound client to port " << p - 1;
@@ -65,7 +67,7 @@ KademliaClient::KademliaClient(QNodeAddress bootstrap_addr) : DataServer()
     connect(udp_socket_, SIGNAL(readyRead()), this,
         SLOT(ReadPendingDatagrams()));
 
-    request_manager_ = new RequestManager(node_id_);
+    request_manager_ = new RequestManager(*node_id_);
     // Issue new requests
     connect(request_manager_, SIGNAL(HasRequest(int, quint32, QNode, QKey)),
         SLOT(ProcessNewRequest(int, quint32, QNode, QKey)));
@@ -74,6 +76,36 @@ KademliaClient::KademliaClient(QNodeAddress bootstrap_addr) : DataServer()
     // Bootstrap process
     request_manager_->Init(bootstrap_addr);
 }
+
+KademliaClient::~KademliaClient()
+{
+    delete node_id_;
+    delete request_manager_;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Scaffold methods for testing kademlia implementation
+
+void KademliaClient::AddFile(QString filename)
+{
+    QFile* file = new QFile(filename);
+    file->open(QIODevice::ReadWrite);
+
+    QByteArray key;
+    key.append(filename); // Should hash filename, but simplified for testing
+
+    Store(key, file);
+}
+
+void KademliaClient::SearchForFile(QString name)
+{
+    QByteArray key;
+    key.append(name); // Should hash it, but again, simplify for now
+    request_manager_->IssueFindValue(key);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Server Functions
 
 void KademliaClient::ReadPendingDatagrams()
 {
@@ -224,7 +256,7 @@ void KademliaClient::SendRequest(QNodeAddress dest, quint32 request_id,
     QVariantMap message)
 {
     // Insert standard message keys
-    message.insert("Source", node_id_);
+    message.insert("Source", *node_id_);
     message.insert("Request Id", request_id);
 
     SendDatagram(dest, message);
@@ -273,7 +305,7 @@ void KademliaClient::SendReply(QNodeAddress dest, quint32 request_id,
     QVariantMap message)
 {
     // Insert standard message keys
-    message.insert("Source", node_id_);
+    message.insert("Source", *node_id_);
     message.insert("Request Id", request_id);
 
     SendDatagram(dest, message);

@@ -10,6 +10,7 @@ QT += network
 CONFIG += crypto
 
 # Input
+HEADERS += main.hh
 HEADERS += kademlia/kademlia_client.hh
 HEADERS += kademlia/data_server.hh
 HEADERS += kademlia/request_manager.hh

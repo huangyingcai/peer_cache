@@ -11,7 +11,7 @@ DataServer::DataServer()
         SLOT(AcceptIncomingConnection()));
 
     files_ = new QHash<QKey, QFile*>();
-    pending_downloads_ = new QHash<QTcpSocket*, QKey>*();
+    pending_downloads_ = new QHash<QTcpSocket*, QKey>();
     in_progress_downloads_ = new QHash<QTcpSocket*, Download*>();
 }
 
@@ -19,14 +19,14 @@ DataServer::~DataServer()
 {
     QList<QFile*>::iterator file_pointer;
     for (file_pointer = files_->values().begin();
-            file_pointer = files_->values().end(); file_pointer++) {
+            file_pointer != files_->values().end(); file_pointer++) {
         delete *file_pointer;
     }
     delete files_;
     delete pending_downloads_;
     QList<Download*>::iterator download_pointer;
     for (download_pointer = in_progress_downloads_->values().begin();
-            download_pointer = in_progress_downloads_->values().end();
+            download_pointer != in_progress_downloads_->values().end();
             download_pointer++) {
         delete *download_pointer;
     }
