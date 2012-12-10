@@ -1,3 +1,4 @@
 *.o
 moc_*.*
 peer_cache
+src/tmp

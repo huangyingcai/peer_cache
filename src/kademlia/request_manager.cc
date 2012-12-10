@@ -12,6 +12,7 @@ RequestManager::RequestManager(QNodeId id) : initialized_(false)
         buckets_[i] = new QNodeList();
     }
     requests_ = new QHash<quint32, Request*>();
+    request_number_to_id_map_ = new QHash<quint32, quint32>();
 
     qDebug() << "Request Manager created";
 }
@@ -24,18 +25,28 @@ RequestManager::~RequestManager()
     }
     delete [] buckets_;
     delete requests_;
+    delete request_number_to_id_map_;
 }
 
 // TODO: Make sure called before all else
 void RequestManager::RequestManager::Init(QNodeAddress bootstrap_address)
 {
     if (!initialized_) {
+        qDebug() << "Initializing Request Manager";
+
         QNode node = qMakePair(QByteArray(), bootstrap_address);
         QNodeList nodes;
         nodes << node;
+
         // TODO: fix this
-        FindNodeRequest* req =
-            new FindNodeRequest(nodes, *node_id_);
+        quint32 request_id = RandomId();
+        quint32 request_number = RandomRequestNumber();
+
+        FindNodeRequest* req = new FindNodeRequest(nodes, *node_id_);
+        requests_->insert(request_id, req);
+        request_number_to_id_map_->insert(request_number, request_id);
+        emit HasRequest(FIND_NODE, request_number, node, *node_id_);
+
         initialized_ = true;
     }
 }
@@ -100,7 +111,7 @@ void RequestManager::RefreshBucket(quint16 bucket)
 quint32 RequestManager::RandomId()
 {
     quint32 request_id = (quint32) qrand();
-    while (request_id != 0 && (requests_->value(request_id)) != NULL) {
+    while (request_id != 0 && requests_->value(request_id) != NULL) {
         request_id = (quint32) qrand();
     }
     return request_id;
@@ -109,7 +120,7 @@ quint32 RequestManager::RandomId()
 quint32 RequestManager::RandomRequestNumber()
 {
     quint32 request_number = (quint32) qrand();
-    while ((request_number_to_id_map_->value(request_number)) != 0) {
+    while (request_number_to_id_map_->value(request_number) != 0) {
         request_number = (quint32) qrand();
     }
     return request_number;
@@ -130,6 +141,8 @@ quint16 RequestManager::Bucket(QKey key)
 
 void RequestManager::IssuePing(QNode node)
 {
+    qDebug() << "Issuing ping to: " << node;
+
     quint32 request_id = RandomId();
     quint32 request_number = RandomRequestNumber();
 
@@ -142,6 +155,8 @@ void RequestManager::IssuePing(QNode node)
 
 void RequestManager::IssueStore(QKey key)
 {
+    qDebug() << "Issuing store for: " << key;
+
     QNodeList closest = ClosestNodes(key, 1);
     if (closest.isEmpty()) return; // This node is supposed to store it
     QNode dest = closest.takeFirst();
@@ -160,6 +175,8 @@ void RequestManager::IssueStore(QKey key)
 // TODO: DRY
 void RequestManager::IssueFindNode(QNodeId id)
 {
+    qDebug() << "Issuing find node: " << id;
+
     QNodeList closest = ClosestNodes(id);
     if (closest.isEmpty()) return; // This node is supposed to store it
 
@@ -182,6 +199,8 @@ void RequestManager::IssueFindNode(QNodeId id)
 
 void RequestManager::IssueFindValue(QKey key)
 {
+    qDebug() << "Issuing find value: " << key;
+
     QNodeList closest = ClosestNodes(key);
     if (closest.isEmpty()) {
         HandleMissingResource(key);

@@ -48,7 +48,7 @@ KademliaClient::KademliaClient(QNodeAddress bootstrap_addr) : DataServer()
         node_id_local[b/8] = (node_id_local.at(b / 8) | ((bits[b] ? 1 : 0) << (b % 8)));
     }
     node_id_ = new QByteArray(node_id_local);
-    qDebug() << "Node Id is: " << node_id_;
+    qDebug() << "Node Id is: " << *node_id_;
 
     // Connect remaining signals and slots to implement asynch server
     // TODO: Qt::Queued Connection
@@ -86,21 +86,28 @@ KademliaClient::~KademliaClient()
 ////////////////////////////////////////////////////////////////////////////////
 // Scaffold methods for testing kademlia implementation
 
-void KademliaClient::AddFile(QString filename)
+void KademliaClient::AddFile(QString pathname)
 {
-    QFile* file = new QFile(filename);
+    qDebug() << "Add file called for " << pathname;
+
+    QFile* file = new QFile(pathname);
     file->open(QIODevice::ReadWrite);
 
-    QByteArray key;
-    key.append(filename); // Should hash filename, but simplified for testing
+    QString filename = pathname.split("/").last();
+    QByteArray key_data;
+    key_data.append(filename);
+    QByteArray key = QCA::Hash("sha1").hash(key_data).toByteArray();
 
     Store(key, file);
 }
 
 void KademliaClient::SearchForFile(QString name)
 {
-    QByteArray key;
-    key.append(name); // Should hash it, but again, simplify for now
+    QByteArray key_data;
+    key_data.append(name);
+    QByteArray key = QCA::Hash("sha1").hash(key_data).toByteArray();
+
+    qDebug() << "Search called for " << name << " of key " << key;
     request_manager_->IssueFindValue(key);
 }
 
@@ -322,6 +329,8 @@ void KademliaClient::ReplyPing(QNodeAddress dest, quint32 request_id)
 void KademliaClient::ReplyFindNode(QNodeAddress dest, quint32 request_id,
     QNodeId id)
 {
+    qDebug() << "Replying find node " << id;
+
     QVariantMap message;
     message.insert("Type", REPLY_NODE);
 
@@ -334,6 +343,8 @@ void KademliaClient::ReplyFindNode(QNodeAddress dest, quint32 request_id,
 void KademliaClient::ReplyFindValue(QNodeAddress dest, quint32 request_id,
     QKey key)
 {
+    qDebug() << "Replying find node " << key;
+
     QVariantMap message;
     message.insert("Type", REPLY_VALUE);
 
