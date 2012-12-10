@@ -45,7 +45,8 @@ KademliaClient::KademliaClient(QNodeAddress bootstrap_addr) : DataServer()
     // TODO: this is hacky
     QByteArray node_id_local = QByteArray(kKeyLength, 0);
     for (int b = 0; b < bits.count(); b++) {
-        node_id_local[b/8] = (node_id_local.at(b / 8) | ((bits[b] ? 1 : 0) << (b % 8)));
+        node_id_local[b/8] = (node_id_local.at(b / 8) |
+            ((bits[b] ? 1 : 0) << (b % 8)));
     }
     node_id_ = new QByteArray(node_id_local);
     qDebug() << "Node Id is: " << *node_id_;
@@ -61,9 +62,9 @@ KademliaClient::KademliaClient(QNodeAddress bootstrap_addr) : DataServer()
 
     udp_socket_ = new QUdpSocket(this);
     quint16 p = kDefaultPort;
-    while (!udp_socket_->bind(QHostAddress::LocalHost, p++));
-    qDebug() << "Bound client to port " << p - 1;
-    // udp_socket_->bind(QHostAddress::LocalHost, kDefaultPort);
+//    while (!udp_socket_->bind(p++));
+//    qDebug() << "Bound client to port " << p - 1;
+    udp_socket_->bind(kDefaultPort);
     connect(udp_socket_, SIGNAL(readyRead()), this,
         SLOT(ReadPendingDatagrams()));
 

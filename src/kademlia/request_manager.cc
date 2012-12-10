@@ -34,7 +34,9 @@ void RequestManager::RequestManager::Init(QNodeAddress bootstrap_address)
     if (!initialized_) {
         qDebug() << "Initializing Request Manager";
 
-        QNode node = qMakePair(QByteArray(), bootstrap_address);
+        //QNode node = qMakePair(QByteArray(), bootstrap_address);
+        QNode node = qMakePair(QByteArray(), qMakePair(QHostAddress(QHostAddress::Broadcast),
+              (quint16)42600));
         QNodeList nodes;
         nodes << node;
 

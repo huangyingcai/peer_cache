@@ -79,9 +79,10 @@ int main(int argc, char** argv)
 
     QStringList args = app.arguments();
 
-//     info = QHostInfo::fromName(args.at(1));
-//     QHostAddress addr = info.addresses().first();
-    QHostAddress addr = QHostAddress(args.at(1));
+    info = QHostInfo::fromName(args.at(1));
+    QHostAddress addr = info.addresses().first();
+    qDebug() << "Bootstrap address: " << addr;
+//    QHostAddress addr = QHostAddress(args.at(1));
     quint16 port = args.at(2).toUInt();
 
     KademliaClientDialog dialog(qMakePair(addr, port));
