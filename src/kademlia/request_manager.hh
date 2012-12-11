@@ -33,14 +33,14 @@ class RequestManager : public QObject
         void UpdateRequest(quint32 request_number, QNode destination,
             QNodeList nodes);
 
-        // TODO:
-        void HandleMissingResource(QKey key);
-
     public slots:
         void RefreshBucket(quint16 bucket);
 
     signals:
         void HasRequest(int, quint32, QNode, QKey key = QKey());
+
+        void ValueFound(QKey);
+        void ValueNotFound(QKey);
 
     private:
         bool initialized_;

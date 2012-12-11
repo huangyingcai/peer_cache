@@ -61,9 +61,6 @@ KademliaClient::KademliaClient() : DataServer()
         SLOT(SendReply(QNodeAddress, quint32, QVariantMap)));
 
     udp_socket_ = new QUdpSocket(this);
-    quint16 p = kDefaultPort;
-//    while (!udp_socket_->bind(p++));
-//    qDebug() << "Bound client to port " << p - 1;
     udp_socket_->bind(kDefaultPort);
     connect(udp_socket_, SIGNAL(readyRead()), this,
         SLOT(ReadPendingDatagrams()));
@@ -72,7 +69,10 @@ KademliaClient::KademliaClient() : DataServer()
     // Issue new requests
     connect(request_manager_, SIGNAL(HasRequest(int, quint32, QNode, QKey)),
         SLOT(ProcessNewRequest(int, quint32, QNode, QKey)));
-    // TODO: Handle Resource Missing
+    connect(request_manager_, SIGNAL(ValueFound(QKey)),
+        SLOT(HandleValueFound(QKey)));
+    connect(request_manager_, SIGNAL(ValueNotFound(QKey)),
+        SLOT(HandleValueNotFound(QKey)));
 
     // Bootstrap process
     QNode broadcast_node =
@@ -113,6 +113,11 @@ void KademliaClient::SearchForFile(QString name)
 
     qDebug() << "Search called for " << name << " of key " << key;
     request_manager_->IssueFindValue(key);
+}
+
+QIODevice* KademliaClient::Get(QKey key)
+{
+    return files_->value(key);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

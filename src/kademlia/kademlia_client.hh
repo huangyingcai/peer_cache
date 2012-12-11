@@ -22,8 +22,11 @@ class KademliaClient : public DataServer
 
     public slots:
         // Scaffold methods for testing kademlia implementation
-        void AddFile(QString filename);
-        void SearchForFile(QString name);
+        void AddFile(QString filename); // FIXME: delete
+        void SearchForFile(QKey key);
+        QIODevice* Get(QKey key);
+        void Remove(QKey key);
+        void Store(QKey key, QIODevice* file);
 
     protected slots:
         void ReadPendingDatagrams();
@@ -56,6 +59,9 @@ class KademliaClient : public DataServer
 
         void ResponseReceived(quint32 request_id,
             QNodeList nodes = QNodeList());
+
+        void ValueFound();
+        void ValueNotFound();
 
     protected:
         const static quint16 kDefaultPort = 42600;

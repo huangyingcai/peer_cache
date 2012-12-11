@@ -180,7 +180,7 @@ void RequestManager::IssueFindValue(QKey key)
 
     QNodeList closest = ClosestNodes(key);
     if (closest.isEmpty()) {
-        HandleMissingResource(key);
+        emit ValueNotFound(key);
         return;
     }
 
@@ -228,9 +228,9 @@ void RequestManager::UpdateRequest(quint32 request_number, QNode destination)
             delete request;
             break;
         case FIND_VALUE: // TODO: this is hack-y for now
-            ((FindValueRequest*)request)->set_found_value(true);
-            // HandleFoundValue(destination,
-            //    ((FindValueRequest*)request)->get_requested_key());
+            // ((FindValueRequest*)request)->set_found_value(true);
+            emit ValueFound(
+                ((FindValueRequest*)request)->get_requested_key());
             break;
         case FIND_NODE: // No-op
             break;
@@ -294,15 +294,9 @@ void RequestManager::UpdateRequest(quint32 request_number, QNode destination,
         request_number_to_id_map_->remove(request_number);
         if (find_request->get_type() == FIND_VALUE &&
                 ((FindValueRequest*)find_request)->get_found_value() == false) {
-            HandleMissingResource(
+            emit ValueNotFound(
                 ((FindValueRequest*)request)->get_requested_key());
         }
         delete request;
     }
-}
-
-void RequestManager::HandleMissingResource(QKey key)
-{
-    qDebug() << "Method stub for RequestManager::HandleMissingResource";
-    qDebug() << "Could not find resource for key: " << key;
 }

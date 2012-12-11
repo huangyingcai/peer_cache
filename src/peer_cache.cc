@@ -3,28 +3,44 @@
 #include "kademlia/kademlia_client.hh"
 #include "peer_cache.hh"
 
+PeerCache::PeerCache()
+{
+    client_ = new KademliaClient();
+}
+
+QIODevice* PeerCache::BlockingLookup(const QUrl& url)
+{
+    QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
+
+    QEventLoop lookup_loop;
+    lookup_loop.connect(client_, SIGNAL(ResourceFound()), SLOT(quit()));
+    lookup_loop.connect(client_, SIGNAL(ResourceNotFound()), SLOT(quit()));
+    client_->SearchForFile(key);
+    lookup_loop.exec();
+
+    return client_->Get(key);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // QNetworkDiskCache overrides
 
-virtual QIODevice* data(const QUrl& url)
+virtual QIODevice* PeerCache::data(const QUrl& url)
 {
     QIODevice* data = QNetworkDiskCache::data(url);
     if (!data) {
-        // queue lookup request
         QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
-        request_manager_->IssueFindValueBlocking(key);
-        // if found, data = resulst;
+        data = BlockingLookup(url);
     }
     return data;
 }
 
-virtual void insert(QIODevice* device)
+virtual void PeerCache::insert(QIODevice* device)
 {
     QNetworkDiskCache::insert(device);
 
     QUrl url = prepared_devices_to_url_map_->value(device);
     QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
-    Store(key, device);
+    client_->Store(key, device);
 
     prepared_devices_to_url_map_->removeAll(device);
 }
@@ -37,7 +53,7 @@ virtual void insert(QIODevice* device)
 //     // then call file metaData; see QNetworkDiskCach
 // }
 
-virtual QIODevice* prepare(const QNetworkCacheMetaData& metaData)
+virtual QIODevice* PeerCache::prepare(const QNetworkCacheMetaData& metaData)
 {
     QIODevice* prepared_device = QNetworkDiskCache::prepare(metaData);
 
@@ -47,15 +63,16 @@ virtual QIODevice* prepare(const QNetworkCacheMetaData& metaData)
     return prepared_device;
 }
 
-virtual bool remove(const QUrl& url)
+virtual bool PeerCache::remove(const QUrl& url)
 {
     QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
-    Remove(key); // FIXME
+    client_->Remove(key);
     QNetworkCache::remove(url);
 }
 
-virtual void updateMetaData(const QNetworkCacheMetaData& metaData)
+virtual void PeerCache::updateMetaData(const QNetworkCacheMetaData& metaData)
 {
+  // get the url from it
   // will only be called if i already have it??
   // do it; if no op, find_value (which stores), timer; call super; then
   // store again
