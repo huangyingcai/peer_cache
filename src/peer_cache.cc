@@ -8,36 +8,53 @@
 
 virtual QIODevice* data(const QUrl& url)
 {
-  // Lookup locally, then DHT
+    QIODevice* data = QNetworkDiskCache::data(url);
+    if (!data) {
+        // queue lookup request
+        QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
+        request_manager_->IssueFindValueBlocking(key);
+        // if found, data = resulst;
+    }
+    return data;
 }
 
 virtual void insert(QIODevice* device)
 {
-    // super
-    // STORE (QHash(url), whatever)
+    QNetworkDiskCache::insert(device);
+
+    QUrl url = prepared_devices_to_url_map_->value(device);
+    QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
+    Store(key, device);
+
+    prepared_devices_to_url_map_->removeAll(device);
 }
 
-virtual QNetworkCacheMetaData metaData(const QUrl& url)
-{
-    // super
-    // FindValue( in DHT
-    // time out the call
-    // then call file metaData; see QNetworkDiskCach
-}
+// virtual QNetworkCacheMetaData metaData(const QUrl& url)
+// {
+//     QNetworkDiskCache::metaData(url);
+//     // FindValue( in DHT
+//     // time out the call
+//     // then call file metaData; see QNetworkDiskCach
+// }
 
-virtual QIODevice* prepare (const QNetworkCacheMetaData& metaData)
+virtual QIODevice* prepare(const QNetworkCacheMetaData& metaData)
 {
-  // probably need to add map of key->url here
+    QIODevice* prepared_device = QNetworkDiskCache::prepare(metaData);
+
+    QUrl url = metaData.url();
+    prepared_devices_to_url_map_->insert(url, prepared_device);
+
+    return prepared_device;
 }
 
 virtual bool remove(const QUrl& url)
 {
-  // remove key->url
-  // remove locally; don't worry about DHT
-  // super
+    QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
+    Remove(key); // FIXME
+    QNetworkCache::remove(url);
 }
 
-virtual void updateMetaData(const QNetworkCacheMetaData & metaData)
+virtual void updateMetaData(const QNetworkCacheMetaData& metaData)
 {
   // will only be called if i already have it??
   // do it; if no op, find_value (which stores), timer; call super; then
