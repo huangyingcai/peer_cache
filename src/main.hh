@@ -12,7 +12,7 @@ class KademliaClientDialog : public QDialog
     Q_OBJECT
 
     public:
-        KademliaClientDialog(QNodeAddress bootstrap_address);
+        KademliaClientDialog();
         ~KademliaClientDialog();
 
     public slots:

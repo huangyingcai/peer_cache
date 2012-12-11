@@ -28,31 +28,6 @@ RequestManager::~RequestManager()
     delete request_number_to_id_map_;
 }
 
-// TODO: Make sure called before all else
-void RequestManager::RequestManager::Init(QNodeAddress bootstrap_address)
-{
-    if (!initialized_) {
-        qDebug() << "Initializing Request Manager";
-
-        //QNode node = qMakePair(QByteArray(), bootstrap_address);
-        QNode node = qMakePair(QByteArray(), qMakePair(QHostAddress(QHostAddress::Broadcast),
-              (quint16)42600));
-        QNodeList nodes;
-        nodes << node;
-
-        // TODO: fix this
-        quint32 request_id = RandomId();
-        quint32 request_number = RandomRequestNumber();
-
-        FindNodeRequest* req = new FindNodeRequest(nodes, *node_id_);
-        requests_->insert(request_id, req);
-        request_number_to_id_map_->insert(request_number, request_id);
-        emit HasRequest(FIND_NODE, request_number, node, *node_id_);
-
-        initialized_ = true;
-    }
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 // Kademlia State Management
 

@@ -16,9 +16,6 @@ class RequestManager : public QObject
     public:
         RequestManager(QNodeId id);
         ~RequestManager();
-        // Must be called before Issue*() commands
-        // Initialization that must occur after signals and slots are set up
-        void Init(QNodeAddress bootstrap_address);
 
         // Kademlia State Management
         quint16 Bucket(QKey key);

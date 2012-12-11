@@ -9,12 +9,11 @@
 #include <QLineEdit>
 #include <QVBoxLayout>
 
-KademliaClientDialog::KademliaClientDialog(QNodeAddress bootstrap_address) :
-    QDialog()
+KademliaClientDialog::KademliaClientDialog() : QDialog()
 {
     setWindowTitle("Kademlia Client");
 
-    client_ = new KademliaClient(bootstrap_address);
+    client_ = new KademliaClient();
 
     add_file_button_ = new QPushButton("Add File", this);
     add_file_button_->setAutoDefault(false);
@@ -72,20 +71,7 @@ int main(int argc, char** argv)
     QHostInfo info = QHostInfo::fromName(nodeInfoString);
     qDebug() << "Local host address: " << info.addresses().first();
 
-    if (argc != 3) {
-        qDebug() << "usage: peer_cache node port";
-        return 1;
-    }
-
-    QStringList args = app.arguments();
-
-    info = QHostInfo::fromName(args.at(1));
-    QHostAddress addr = info.addresses().first();
-    qDebug() << "Bootstrap address: " << addr;
-//    QHostAddress addr = QHostAddress(args.at(1));
-    quint16 port = args.at(2).toUInt();
-
-    KademliaClientDialog dialog(qMakePair(addr, port));
+    KademliaClientDialog dialog;
     dialog.show();
 
     // Enter the Qt main loop; everything else is event driven

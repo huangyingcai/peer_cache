@@ -17,7 +17,7 @@ class KademliaClient : public DataServer
         static QStringList SerializeNodes(QList<QNode> nodes);
         static QList<QNode> DeserializeNodeStrings(QStringList node_strings);
 
-        KademliaClient(QNodeAddress bootstrap_addr);
+        KademliaClient();
         ~KademliaClient();
 
     public slots:
@@ -34,6 +34,7 @@ class KademliaClient : public DataServer
             QKey key);
         void SendRequest(QNodeAddress dest, quint32 request_id,
             QVariantMap message);
+        void SendJoin(QNodeAddress dest, quint32 request_id);
         void SendPing(QNodeAddress dest, quint32 request_id);
         void SendStore(QNodeAddress dest, quint32 request_id, QKey key);
         void SendFindNode(QNodeAddress dest, quint32 request_id, QNodeId id);
@@ -41,6 +42,7 @@ class KademliaClient : public DataServer
 
         void SendReply(QNodeAddress dest, quint32 request_id,
             QVariantMap message);
+        void ReplyJoin(QNodeAddress dest, quint32 request_id);
         void ReplyPing(QNodeAddress dest, quint32 request_id);
         // NOTE: ReplyDownload does not exist. Downloads (i.e. replies to store) are
         // handled by the data manager.

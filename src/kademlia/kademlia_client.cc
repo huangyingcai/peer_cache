@@ -35,7 +35,7 @@ QNodeList KademliaClient::DeserializeNodeStrings(QStringList node_strings)
     return nodes;
 }
 
-KademliaClient::KademliaClient(QNodeAddress bootstrap_addr) : DataServer()
+KademliaClient::KademliaClient() : DataServer()
 {
     qsrand(time(NULL));
     QBitArray bits(kKeyLength * 8, 0);
@@ -75,7 +75,10 @@ KademliaClient::KademliaClient(QNodeAddress bootstrap_addr) : DataServer()
     // TODO: Handle Resource Missing
 
     // Bootstrap process
-    request_manager_->Init(bootstrap_addr);
+    QNode broadcast_node =
+        qMakePair(QByteArray(), qMakePair(QHostAddress(QHostAddress::Broadcast),
+                                          (quint16) kDefaultPort));
+    ProcessNewRequest(JOIN, 1, broadcast_node, *node_id_);
 }
 
 KademliaClient::~KademliaClient()
@@ -148,6 +151,7 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
         return ;
     }
     QNode source = QNode(source_id, addr);
+    if (*node_id_ == QString(source_id.constData())) return;
     request_manager_->UpdateBuckets(source);
     qDebug() << "Received datagram from " << source;
 
@@ -164,6 +168,11 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
     QNodeList nodes;
     QNodeId id;
     switch (type) {
+        case JOIN:
+            ReplyJoin(addr, request_id);
+            break;
+        case JOIN_REPLY:
+            break;
         case PING:
             ReplyPing(addr, request_id);
             break;
@@ -191,7 +200,7 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
                 ERROR("Improper FIND_VALUE: no key");
             }
             break;
-        case REPLY_VALUE:
+        case FIND_VALUE_REPLY:
             // TODO: Datagram ERRORS?
             key = message.value("Key").toByteArray();
             node_list = message.value("Nodes").toStringList();
@@ -212,7 +221,7 @@ void KademliaClient::ProcessDatagram(QNodeAddress addr, QVariantMap message)
                 ERROR("Improper FIND_NODE: no id");
             }
             break;
-        case REPLY_NODE:
+        case FIND_NODE_REPLY:
             // TODO: Datagram ERRORS?
             node_list = message.value("Nodes").toStringList();
             nodes = KademliaClient::DeserializeNodeStrings(node_list);
@@ -243,6 +252,9 @@ void KademliaClient::ProcessNewRequest(int type, quint32 request_id, QNode dest,
     qDebug() << "Has new request of type: " << type << " and dest " << dest;
     QNodeAddress dest_addr = dest.second;
     switch (type) {
+        case JOIN:
+            SendJoin(dest_addr, request_id);
+            break;
         case PING:
             SendPing(dest_addr, request_id);
             break;
@@ -268,6 +280,14 @@ void KademliaClient::SendRequest(QNodeAddress dest, quint32 request_id,
     message.insert("Request Id", request_id);
 
     SendDatagram(dest, message);
+}
+
+void KademliaClient::SendJoin(QNodeAddress dest, quint32 request_id)
+{
+    QVariantMap message;
+    message.insert("Type", JOIN);
+
+    emit RequestReady(dest, request_id, message);
 }
 
 void KademliaClient::SendPing(QNodeAddress dest, quint32 request_id)
@@ -319,6 +339,14 @@ void KademliaClient::SendReply(QNodeAddress dest, quint32 request_id,
     SendDatagram(dest, message);
 }
 
+void KademliaClient::ReplyJoin(QNodeAddress dest, quint32 request_id)
+{
+    QVariantMap message;
+    message.insert("Type", JOIN_REPLY);
+
+    emit ReplyReady(dest, request_id, message);
+}
+
 void KademliaClient::ReplyPing(QNodeAddress dest, quint32 request_id)
 {
     QVariantMap message;
@@ -333,7 +361,7 @@ void KademliaClient::ReplyFindNode(QNodeAddress dest, quint32 request_id,
     qDebug() << "Replying find node " << id;
 
     QVariantMap message;
-    message.insert("Type", REPLY_NODE);
+    message.insert("Type", FIND_NODE_REPLY);
 
     QNodeList nodes = request_manager_->ClosestNodes(id);
     message.insert("Nodes", KademliaClient::SerializeNodes(nodes));
@@ -347,7 +375,7 @@ void KademliaClient::ReplyFindValue(QNodeAddress dest, quint32 request_id,
     qDebug() << "Replying find node " << key;
 
     QVariantMap message;
-    message.insert("Type", REPLY_VALUE);
+    message.insert("Type", FIND_VALUE_REPLY);
 
     // If have cached resource, reply with port open for download, otherwise
     // reply with the closest k nodes to the requested key
