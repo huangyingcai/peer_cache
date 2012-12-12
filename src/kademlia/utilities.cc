@@ -3,6 +3,7 @@
 
 #include <QBitArray>
 
+// TODO: namespace
 bool operator>(QBitArray& a1, QBitArray& a2)
 {
     for (int i = 0; i < kKeyLength * 8; i++) {
@@ -28,3 +29,4 @@ QBitArray Distance(QKey& key_a, QKey& key_b)
 
      return a_bits ^ b_bits;
 }
+

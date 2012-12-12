@@ -181,7 +181,7 @@ void DataServer::ProcessDownload()
 DataServer::Download::Download(QKey key) : size_(0), bytes_read_(0)
 {
     key_ = new QKey(key);
-    file_ = new QFile(QString("tmp/%1").arg(key.constData())); // TODO: error handling
+    file_ = new QFile(QString("tmp/%1").arg(key.constData())); // TODO: error handling, FIXME: directory
     file_->open(QIODevice::ReadWrite);
 }
 
