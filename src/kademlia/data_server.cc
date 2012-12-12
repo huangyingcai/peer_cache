@@ -11,14 +11,14 @@ DataServer::DataServer()
     connect(this, SIGNAL(newConnection()), this,
         SLOT(AcceptIncomingConnection()));
 
-    files_ = new QHash<QKey, QFile*>();
+    files_ = new QHash<QKey, QIODevice*>();
     pending_downloads_ = new QHash<QTcpSocket*, QKey>();
     in_progress_downloads_ = new QHash<QTcpSocket*, Download*>();
 }
 
 DataServer::~DataServer()
 {
-    QList<QFile*>::iterator file_pointer;
+    QList<QIODevice*>::iterator file_pointer;
     for (file_pointer = files_->values().begin();
             file_pointer != files_->values().end(); file_pointer++) {
         delete *file_pointer;
@@ -35,7 +35,7 @@ DataServer::~DataServer()
     // Close and free each thing in files_.values
 }
 
-void DataServer::Store(QKey key, QFile* file) // TODO: QIODEvice??:vs
+void DataServer::Store(QKey key, QIODevice* file) // TODO: QIODEvice??:vs
 {
     qDebug() << "Storing record for file " << file->fileName() <<
         " under key " << key;
@@ -47,7 +47,7 @@ void DataServer::Store(QKey key, QFile* file) // TODO: QIODEvice??:vs
 // QKey->QUrl, and call super.data(url), etc; let it deal with insertion and
 // such
 
-QFile* DataServer::Value(QKey key)
+QIODevice* DataServer::Get(QKey key)
 {
     return files_->value(key, NULL);
 }

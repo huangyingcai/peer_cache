@@ -12,8 +12,9 @@ class DataServer : public QTcpServer
         DataServer();
         ~DataServer();
 
-        void Store(QKey key, QFile* file);
-        QFile* Value(QKey key);
+        void Store(QKey key, QIODevice* file);
+        void Remove(QKey key) { files_->removeAll(key); };
+        QIODevice* Get(QKey key);
 
     public slots:
         // Data transmission
@@ -28,7 +29,7 @@ class DataServer : public QTcpServer
         const static quint16 kDefaultPort = 42600;
         const static quint64 kBufferSize = 1024;
 
-        QHash<QKey, QFile*>* files_;
+        QHash<QKey, QIODevice*>* files_;
 
         class Download
         {

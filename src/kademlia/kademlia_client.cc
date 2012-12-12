@@ -88,36 +88,24 @@ KademliaClient::~KademliaClient()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// Scaffold methods for testing kademlia implementation
+// DataServer Overrides
 
-void KademliaClient::AddFile(QString pathname)
+void KademliaClient::Store(QKey key, QIODevice* file)
 {
-    qDebug() << "Add file called for " << pathname;
-
-    QFile* file = new QFile(pathname);
-    file->open(QIODevice::ReadWrite);
-
-    QString filename = pathname.split("/").last();
-    QByteArray key_data;
-    key_data.append(filename);
-    QByteArray key = QCA::Hash("sha1").hash(key_data).toByteArray();
-
-    Store(key, file);
+    DataServer::Store(key, file); // Store locally
+    request_manager_->IssueStore(key); // and also in DHT
 }
 
-void KademliaClient::SearchForFile(QString name)
-{
-    QByteArray key_data;
-    key_data.append(name);
-    QByteArray key = QCA::Hash("sha1").hash(key_data).toByteArray();
+////////////////////////////////////////////////////////////////////////////////
 
-    qDebug() << "Search called for " << name << " of key " << key;
-    request_manager_->IssueFindValue(key);
-}
-
-QIODevice* KademliaClient::Get(QKey key)
+void KademliaClient::Find(QKey key)
 {
-    return files_->value(key);
+    qDebug() << "Search called for " << key;
+    if (Get(key)) {
+        emit ResourceFound(key, Get(key));
+    } else {
+        request_manager_->IssueFindValue(key);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -5,20 +5,23 @@
 
 PeerCache::PeerCache()
 {
-    client_ = new KademliaClient();
+    client_thread_ = new KademliaClientThread();
 }
 
-QIODevice* PeerCache::BlockingLookup(const QUrl& url)
+QIODevice* PeerCache::BlockingLookup(const QKey& key)
 {
-    QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
-
     QEventLoop lookup_loop;
-    lookup_loop.connect(client_, SIGNAL(ResourceFound()), SLOT(quit()));
-    lookup_loop.connect(client_, SIGNAL(ResourceNotFound()), SLOT(quit()));
-    client_->SearchForFile(key);
+    lookup_loop.connect(client_thread_, SIGNAL(FindRequestComplete()),
+        SLOT(quit()));
+    QTimer timeout_timer;
+    lookup_loop.connect(&timeout_timer, SIGNAL(complete()), SLOT(quit()));
+    client_thread_->Find(key);
+    timeout_timer.start(10); // Default Timeout; if the resource is so long
+                             // that the download takes a while, that's okay;
+                             // it will be available the next time around
     lookup_loop.exec();
 
-    return client_->Get(key);
+    return client_thread_->get_last_found_value();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -26,32 +29,30 @@ QIODevice* PeerCache::BlockingLookup(const QUrl& url)
 
 virtual QIODevice* PeerCache::data(const QUrl& url)
 {
-    QIODevice* data = QNetworkDiskCache::data(url);
-    if (!data) {
-        QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
-        data = BlockingLookup(url);
-    }
-    return data;
+    QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
+    return BlockingLookup(key);
 }
 
 virtual void PeerCache::insert(QIODevice* device)
 {
-    QNetworkDiskCache::insert(device);
-
     QUrl url = prepared_devices_to_url_map_->value(device);
     QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
-    client_->Store(key, device);
+    client_thread_->Store(key, device);
 
     prepared_devices_to_url_map_->removeAll(device);
 }
 
-// virtual QNetworkCacheMetaData metaData(const QUrl& url)
-// {
-//     QNetworkDiskCache::metaData(url);
-//     // FindValue( in DHT
-//     // time out the call
-//     // then call file metaData; see QNetworkDiskCach
-// }
+virtual QNetworkCacheMetaData metaData(const QUrl& url)
+{
+    QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
+    QIODevice* data = BlockingLookup(url);
+    if (data) {
+        // FIXME: read the data from it
+    } else {
+        // FIXME: return invalid metadata
+    }
+    return meta_data;
+}
 
 virtual QIODevice* PeerCache::prepare(const QNetworkCacheMetaData& metaData)
 {
@@ -63,19 +64,21 @@ virtual QIODevice* PeerCache::prepare(const QNetworkCacheMetaData& metaData)
     return prepared_device;
 }
 
+// Current action is to only delete locally
 virtual bool PeerCache::remove(const QUrl& url)
 {
-    QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
-    client_->Remove(key);
-    QNetworkCache::remove(url);
+    QNetworkDiskCache::remove(url);
 }
 
 virtual void PeerCache::updateMetaData(const QNetworkCacheMetaData& metaData)
 {
-  // get the url from it
-  // will only be called if i already have it??
-  // do it; if no op, find_value (which stores), timer; call super; then
-  // store again
-    // super;
-    // store
+    if (!QNetworkDiskCache::data(metaData.url())) { // don't have it locally
+        // Try to look it up
+        QUrl url = metaData.url();
+        QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
+        QIODevice* data = BlockingLookup(url);
+        // FIXME: figure out store, etc; -- Blocking lookup stores in local dht
+    }
+
+    QNetworkDiskCache::updateMetaData(metaData);
 }
