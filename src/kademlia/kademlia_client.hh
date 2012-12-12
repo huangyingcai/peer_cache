@@ -61,8 +61,8 @@ class KademliaClient : public DataServer
         void ResponseReceived(quint32 request_id,
             QNodeList nodes = QNodeList());
 
-        void ValueFound(QKey key, QIODevice* device);
-        void ValueNotFound(QKey key);
+        void ValueFound(QKey key, QIODevice* device); // TODO: DRY
+        void ValueNotFound(QKey key, QIODevice* = NULL);
 
     protected:
         const static quint16 kDefaultPort = 42600;

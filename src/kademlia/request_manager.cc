@@ -180,6 +180,7 @@ void RequestManager::IssueFindValue(QKey key)
 
     QNodeList closest = ClosestNodes(key);
     if (closest.isEmpty()) {
+        qDebug() << "No nodes closer to value than self";
         emit ValueNotFound(key);
         return;
     }

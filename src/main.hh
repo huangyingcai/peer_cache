@@ -3,9 +3,12 @@
 
 #include <QDialog>
 
+#include <QNetworkRequest>
+
 class QNetworkAccessManager;
 class QNetworkReply;
 class QLineEdit;
+class QPushButton;
 
 class NetworkAccessDialog : public QDialog
 {
@@ -16,11 +19,13 @@ class NetworkAccessDialog : public QDialog
         ~NetworkAccessDialog();
 
     public slots:
+        void SwitchConnectionMode();
         void CaptureGetRequestInput();
         void GetRequestFinished(QNetworkReply* reply);
 
     private:
         QNetworkAccessManager* network_manager_;
-
+        QNetworkRequest::CacheLoadControl cache_load_control_;
+        QPushButton* switch_to_offline_mode_button_;
         QLineEdit* get_input_;
 };

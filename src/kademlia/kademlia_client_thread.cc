@@ -48,6 +48,7 @@ void KademliaClientThread::HandleLookupTermination(QKey key, QIODevice* device)
         last_found_value_ = NULL;
     }
     mutex_.unlock();
+    emit FindRequestComplete();
 }
 
 void KademliaClientThread::run()
@@ -56,7 +57,7 @@ void KademliaClientThread::run()
     client_ = new KademliaClient();
     connect(client_, SIGNAL(ValueFound(QKey, QIODevice*)), this,
         SLOT(HandleLookupTermination(QKey, QIODevice*)));
-    connect(client_, SIGNAL(ValueNotFound(QKey)), this,
+    connect(client_, SIGNAL(ValueNotFound(QKey, QIODevice*)), this,
         SLOT(HandleLookupTermination(QKey, QIODevice*)));
     mutex_.unlock();
     exec();

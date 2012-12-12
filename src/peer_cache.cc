@@ -36,13 +36,14 @@ QIODevice* PeerCache::BlockingLookup(const QKey& key)
     QEventLoop lookup_loop;
     lookup_loop.connect(client_thread_, SIGNAL(FindRequestComplete()),
         SLOT(quit()));
-    QTimer timeout_timer;
-    lookup_loop.connect(&timeout_timer, SIGNAL(complete()), SLOT(quit()));
     client_thread_->Find(key);
-    timeout_timer.start(10); // Default Timeout; if the resource is so long
-                             // that the download takes a while, that's okay;
-                             // it will be available the next time around
+    // Default Timeout; if the resource is so long
+    // that the download takes a while, that's okay;
+    // it will be available the next time around
+    QTimer::singleShot(10000, &lookup_loop, SLOT(quit()));
     lookup_loop.exec();
+
+    qDebug() << "Lookup result: " << client_thread_->get_last_found_value();
 
     return client_thread_->get_last_found_value();
 }
@@ -57,20 +58,21 @@ QIODevice* PeerCache::data(const QUrl& url)
     if (!url.isValid()) return NULL;
 
     QKey key = PeerCache::ToKey(url);
+
     return BlockingLookup(key);
 }
 
 void PeerCache::insert(QIODevice* device)
 {
-    qDebug() << "PeerCache::insert";
-
-    if (!(prepared_devices_to_url_map_->value(device)).isEmpty()) {
+    if (prepared_devices_to_url_map_->value(device).isEmpty()) {
         qDebug() << "Could not find device in prepared devices";
         return;
     }
 
     QUrl url = prepared_devices_to_url_map_->value(device);
     QKey key = PeerCache::ToKey(url);
+    qDebug() << "PeerCache::insert " << key << " , " << device;
+    device->seek(0);
     client_thread_->Store(key, device); // Save into DHT
 
     prepared_devices_to_url_map_->remove(device);
@@ -81,12 +83,16 @@ QNetworkCacheMetaData PeerCache::metaData(const QUrl& url)
     qDebug() << "PeerCache::metaData for " << url;
 
     QKey key = PeerCache::ToKey(url);
-    QIODevice* data = BlockingLookup(key);
+    QIODevice* device = BlockingLookup(key);
 
     QNetworkCacheMetaData meta_data;
-    if (data) {
-        QDataStream in(data);
+    if (device) {
+        device->seek(0);
+        QDataStream in(device);
         in >> meta_data;
+
+        qDebug() << "Got meta data " << meta_data.attributes();
+        qDebug() << "with url " << meta_data.url() << meta_data.expirationDate();
     }
     return meta_data;
 }
@@ -95,16 +101,18 @@ QIODevice* PeerCache::prepare(const QNetworkCacheMetaData& metaData)
 {
     qDebug() << "PeerCache::prepare for " << metaData.url();
 
-    if (!metaData.isValid() || !metaData.url().isValid() ||
-            !metaData.saveToDisk()) {
+    if (!metaData.isValid() || !metaData.url().isValid()) {
+            //!metaData.saveToDisk()) { Just cache everything for now
         qDebug() << "Invalid metadata";
         return NULL;
     }
+    qDebug() << "Preparing meta data " << metaData.attributes();
+    qDebug() << "with url " << metaData.url() << metaData.expirationDate();
 
     QUrl url = metaData.url();
     QKey key = PeerCache::ToKey(url);
     QFile* prepared_device = new QFile(QString("tmp/%1").arg(key.constData())); // FIXME: hard-coded directory
-    prepared_device->open(QIODevice::ReadWrite);
+    prepared_device->open(QIODevice::ReadWrite | QIODevice::Truncate);
 
     prepared_devices_to_url_map_->insert(prepared_device, url);
 
@@ -127,8 +135,8 @@ void PeerCache::updateMetaData(const QNetworkCacheMetaData& metaData)
 {
     qDebug() << "PeerCache::updateMetaData()" << metaData.url();
 
-    if (!metaData.isValid() || !metaData.url().isValid() ||
-            !metaData.saveToDisk()) {
+    if (!metaData.isValid() || !metaData.url().isValid()) {
+        //    !metaData.saveToDisk()) { (see above)
         qDebug() << "Invalid metadata";
         return;
     }
@@ -158,7 +166,7 @@ void PeerCache::updateMetaData(const QNetworkCacheMetaData& metaData)
 // FIXME: just need to be implemented; not necessary for functioning
 qint64 PeerCache::cacheSize() const
 {
-    return (qint64) 0;
+    return (qint64) 1024 * 1024 * 5;
 }
 
 void PeerCache::clear()

@@ -101,8 +101,9 @@ void KademliaClient::Store(QKey key, QIODevice* file)
 void KademliaClient::Find(QKey key)
 {
     qDebug() << "Search called for " << key;
-    if (Get(key)) {
-        emit ValueFound(key, Get(key));
+    QIODevice* value = Get(key);
+    if (value) {
+        emit ValueFound(key, value);
     } else {
         request_manager_->IssueFindValue(key);
     }
@@ -390,4 +391,5 @@ void KademliaClient::HandleValueFound(QKey key)
 void KademliaClient::HandleValueNotFound(QKey key)
 {
     emit ValueNotFound(key);
+    qDebug() << "Client emitted value not found for key " << key;
 }

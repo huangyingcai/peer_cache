@@ -18,6 +18,7 @@ DataServer::DataServer()
 
 DataServer::~DataServer()
 {
+    qDebug() << "~DataServer called";
     QList<QIODevice*>::iterator file_pointer;
     for (file_pointer = files_->values().begin();
             file_pointer != files_->values().end(); file_pointer++) {
@@ -37,7 +38,7 @@ DataServer::~DataServer()
 
 void DataServer::Store(QKey key, QIODevice* file) // TODO: QIODEvice??:vs
 {
-    qDebug() << "Storing record for file " << key;
+    qDebug() << "DataServer::Store " << key << " , " << file;
 
     files_->insert(key, file);
 }
@@ -55,7 +56,9 @@ void DataServer::Remove(QKey key)
 
 QIODevice* DataServer::Get(QKey key)
 {
-    return files_->value(key, NULL);
+    qDebug() << "DataServer::Get";
+    // qDebug() << "Getting key " << key << " with value " << files_->value(key);
+    return files_->value(key);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
