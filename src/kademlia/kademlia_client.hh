@@ -25,7 +25,6 @@ class KademliaClient : public DataServer
 
         // DataServer Overrides
         void Store(QKey key, QIODevice* file);
-        void Remove(QKey key);
 
     protected slots:
         void ReadPendingDatagrams();
@@ -50,6 +49,9 @@ class KademliaClient : public DataServer
         // handled by the data manager.
         void ReplyFindNode(QNodeAddress dest, quint32 request_id, QNodeId id);
         void ReplyFindValue(QNodeAddress dest, quint32 request_id, QKey key);
+
+        void HandleValueFound(QKey key);
+        void HandleValueNotFound(QKey key);
 
     signals:
         void DatagramReady(QNodeAddress, QVariantMap);

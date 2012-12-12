@@ -3,7 +3,8 @@
 
 #include <QDialog>
 
-class QPushButton;
+class QNetworkAccessManager;
+class QNetworkReply;
 class QLineEdit;
 
 class NetworkAccessDialog : public QDialog
@@ -16,9 +17,10 @@ class NetworkAccessDialog : public QDialog
 
     public slots:
         void CaptureGetRequestInput();
+        void GetRequestFinished(QNetworkReply* reply);
 
     private:
-        NetworkAccessManager* network_manager_;
+        QNetworkAccessManager* network_manager_;
 
         QLineEdit* get_input_;
 };

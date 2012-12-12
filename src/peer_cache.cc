@@ -1,7 +1,8 @@
-#include "includes.hh"
+#include <QEventLoop>
 
-#include "kademlia/kademlia_client.hh"
+#include "includes.hh"
 #include "peer_cache.hh"
+#include "kademlia/kademlia_client_thread.hh"
 
 // NOTE: Implementation loosely derived from QNetworkDiskCache (an actual
 // license to come)
@@ -49,35 +50,38 @@ QIODevice* PeerCache::BlockingLookup(const QKey& key)
 ///////////////////////////////////////////////////////////////////////////////
 // QAbstractNetworkCache overrides
 
-virtual QIODevice* PeerCache::data(const QUrl& url)
+QIODevice* PeerCache::data(const QUrl& url)
 {
     qDebug() << "PeerCache::data for " << url;
 
     if (!url.isValid()) return NULL;
 
+    QKey key = PeerCache::ToKey(url);
     return BlockingLookup(key);
 }
 
-virtual void PeerCache::insert(QIODevice* device)
+void PeerCache::insert(QIODevice* device)
 {
     qDebug() << "PeerCache::insert";
 
-    if (!prepared_devices_to_url_map_->value(device)) {
+    if (!(prepared_devices_to_url_map_->value(device)).isEmpty()) {
         qDebug() << "Could not find device in prepared devices";
         return;
     }
 
     QUrl url = prepared_devices_to_url_map_->value(device);
-    client_thread_->Store(PeerCache::ToKey(url), device); // Save into DHT
+    QKey key = PeerCache::ToKey(url);
+    client_thread_->Store(key, device); // Save into DHT
 
-    prepared_devices_to_url_map_->removeAll(device);
+    prepared_devices_to_url_map_->remove(device);
 }
 
-virtual QNetworkCacheMetaData metaData(const QUrl& url)
+QNetworkCacheMetaData PeerCache::metaData(const QUrl& url)
 {
     qDebug() << "PeerCache::metaData for " << url;
 
-    QIODevice* data = BlockingLookup(PeerCache::ToKey(url));
+    QKey key = PeerCache::ToKey(url);
+    QIODevice* data = BlockingLookup(key);
 
     QNetworkCacheMetaData meta_data;
     if (data) {
@@ -87,7 +91,7 @@ virtual QNetworkCacheMetaData metaData(const QUrl& url)
     return meta_data;
 }
 
-virtual QIODevice* PeerCache::prepare(const QNetworkCacheMetaData& metaData)
+QIODevice* PeerCache::prepare(const QNetworkCacheMetaData& metaData)
 {
     qDebug() << "PeerCache::prepare for " << metaData.url();
 
@@ -100,9 +104,9 @@ virtual QIODevice* PeerCache::prepare(const QNetworkCacheMetaData& metaData)
     QUrl url = metaData.url();
     QKey key = PeerCache::ToKey(url);
     QFile* prepared_device = new QFile(QString("tmp/%1").arg(key.constData())); // FIXME: hard-coded directory
-    new_file->open(QIODevice::ReadWrite);
+    prepared_device->open(QIODevice::ReadWrite);
 
-    prepared_devices_to_url_map_->insert(prepared_devices_to_url_map_, url);
+    prepared_devices_to_url_map_->insert(prepared_device, url);
 
     QDataStream out(prepared_device);
     out << metaData;
@@ -110,14 +114,16 @@ virtual QIODevice* PeerCache::prepare(const QNetworkCacheMetaData& metaData)
     return prepared_device;
 }
 
-virtual bool PeerCache::remove(const QUrl& url)
+bool PeerCache::remove(const QUrl& url)
 {
     qDebug() << "PeerCache::remove for " << url;
 
-    client_thread_->Remove(PeerCache::ToKey(key));
+    QKey key = PeerCache::ToKey(url);
+    client_thread_->Remove(key);
+    return true; // FIXME:
 }
 
-virtual void PeerCache::updateMetaData(const QNetworkCacheMetaData& metaData)
+void PeerCache::updateMetaData(const QNetworkCacheMetaData& metaData)
 {
     qDebug() << "PeerCache::updateMetaData()" << metaData.url();
 
@@ -147,4 +153,14 @@ virtual void PeerCache::updateMetaData(const QNetworkCacheMetaData& metaData)
     }
     delete old_device;
     insert(new_device);
+}
+
+// FIXME: just need to be implemented; not necessary for functioning
+qint64 PeerCache::cacheSize() const
+{
+    return (qint64) 0;
+}
+
+void PeerCache::clear()
+{
 }

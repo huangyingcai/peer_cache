@@ -102,7 +102,7 @@ void KademliaClient::Find(QKey key)
 {
     qDebug() << "Search called for " << key;
     if (Get(key)) {
-        emit ResourceFound(key, Get(key));
+        emit ValueFound(key, Get(key));
     } else {
         request_manager_->IssueFindValue(key);
     }
@@ -372,7 +372,7 @@ void KademliaClient::ReplyFindValue(QNodeAddress dest, quint32 request_id,
 
     // If have cached resource, reply with port open for download, otherwise
     // reply with the closest k nodes to the requested key
-    if (Value(key)) {
+    if (Get(key)) {
         message.insert("Key", key);
     } else {
         QNodeList nodes = request_manager_->ClosestNodes(key);
@@ -382,3 +382,12 @@ void KademliaClient::ReplyFindValue(QNodeAddress dest, quint32 request_id,
     emit ReplyReady(dest, request_id, message);
 }
 
+void KademliaClient::HandleValueFound(QKey key)
+{
+    emit ValueFound(key, Get(key));
+}
+
+void KademliaClient::HandleValueNotFound(QKey key)
+{
+    emit ValueNotFound(key);
+}

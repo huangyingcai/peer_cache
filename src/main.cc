@@ -1,21 +1,21 @@
 #include <QApplication>
-
-#include "main.hh"
-#include "kademlia_client.hh"
-
+#include <QNetworkAccessManager>
+#include <QNetworkRequest>
+#include <QNetworkReply>
 #include <QHostInfo>
-#include <QFileDialog>
-#include <QPushButton>
 #include <QLineEdit>
 #include <QVBoxLayout>
 
+#include "peer_cache.hh"
+#include "main.hh"
+
 NetworkAccessDialog::NetworkAccessDialog() : QDialog()
 {
-    network_manager_ = new NetworkAccessManager(this);
+    network_manager_ = new QNetworkAccessManager(this);
     connect(network_manager_, SIGNAL(finished(QNetworkReply*)), this,
-        SLOT(GetRequestFinished(QNetworkReply*)));
 
-    PeerCache* peer_cache = new PeerCache(this);
+        SLOT(GetRequestFinished(QNetworkReply*)));
+    PeerCache* peer_cache = new PeerCache();
     network_manager_->setCache(peer_cache);
 
     get_input_ = new QLineEdit(this);
@@ -33,21 +33,24 @@ NetworkAccessDialog::~NetworkAccessDialog()
     // QObject/parent relationships handle the rest
 }
 
-void KademliaClientDialog::CaptureGetRequestInput()
+void NetworkAccessDialog::CaptureGetRequestInput()
 {
     QString url_string = get_input_->text();
 
     // Clear the messageInput to get ready for the next input message.
     get_input_->clear();
 
-    QNetworkRequest request(QUrl(url_string));
-    request.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::PreferCache);
+    QNetworkRequest request;
+    request.setUrl(QUrl(url_string));
+    request.setAttribute(QNetworkRequest::CacheLoadControlAttribute,
+        QNetworkRequest::PreferCache);
     network_manager_->get(request);
 }
 
 void NetworkAccessDialog::GetRequestFinished(QNetworkReply* reply)
 {
-    QVariant from_cache = reply->attribute(QNetworkRequest::SourceIsFromCacheAttribute);
+    QVariant from_cache =
+        reply->attribute(QNetworkRequest::SourceIsFromCacheAttribute);
     qDebug() << "page from cache?" << from_cache.toBool();
 
     reply->deleteLater();

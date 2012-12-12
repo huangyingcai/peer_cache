@@ -13,7 +13,7 @@ class DataServer : public QTcpServer
         ~DataServer();
 
         void Store(QKey key, QIODevice* file);
-        void Remove(QKey key) { files_->removeAll(key); };
+        void Remove(QKey key);
         QIODevice* Get(QKey key);
 
     public slots:

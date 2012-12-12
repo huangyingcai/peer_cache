@@ -37,10 +37,16 @@ DataServer::~DataServer()
 
 void DataServer::Store(QKey key, QIODevice* file) // TODO: QIODEvice??:vs
 {
-    qDebug() << "Storing record for file " << file->fileName() <<
-        " under key " << key;
+    qDebug() << "Storing record for file " << key;
 
     files_->insert(key, file);
+}
+
+void DataServer::Remove(QKey key)
+{
+    QIODevice* file = files_->take(key);
+    // FIXME: close file; delete from fs
+    delete file;
 }
 
 // FIXME: when connecting to cache, just need to keep map of
@@ -83,7 +89,7 @@ void DataServer::ProcessDownloadRequest()
     QByteArray block;
     QDataStream out(&block, QIODevice::WriteOnly);
 
-    QFile* upload = Value(key);
+    QIODevice* upload = Get(key);
     out << upload->size();
     qDebug() << "Upload has file size " << upload->size();
     connection->write(block); // TODO: write in pieces

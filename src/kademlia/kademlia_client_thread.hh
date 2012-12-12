@@ -1,4 +1,13 @@
+#ifndef KADEMLIA_CLIENT_THREAD_HH
+#define KADEMLIA_CLIENT_THREAD_HH
+
+#include "types.hh"
+
 #include <QThread>
+#include <QMutex>
+
+class KademliaClient;
+class QIODevice;
 
 class KademliaClientThread : public QThread
 {
@@ -13,6 +22,7 @@ class KademliaClientThread : public QThread
     public slots:
         void Find(QKey key);
         void Store(QKey key, QIODevice* file);
+        void Remove(QKey key);
 
         void HandleLookupTermination(QKey key, QIODevice* device = NULL);
         QIODevice* get_last_found_value() { return last_found_value_; };
@@ -26,3 +36,5 @@ class KademliaClientThread : public QThread
         QKey* find_key_;
         QIODevice* last_found_value_;
 };
+
+#endif // KADEMLIA_CLIENT_THREAD_HH

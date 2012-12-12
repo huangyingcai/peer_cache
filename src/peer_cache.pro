@@ -11,7 +11,9 @@ CONFIG += crypto
 
 # Input
 HEADERS += main.hh
+HEADERS += peer_cache.hh
 HEADERS += kademlia/kademlia_client.hh
+HEADERS += kademlia/kademlia_client_thread.hh
 HEADERS += kademlia/data_server.hh
 HEADERS += kademlia/request_manager.hh
 HEADERS += kademlia/request.hh
@@ -19,7 +21,9 @@ HEADERS += kademlia/utilities.hh
 
 
 SOURCES += main.cc
+SOURCES += peer_cache.cc
 SOURCES += kademlia/kademlia_client.cc
+SOURCES += kademlia/kademlia_client_thread.cc
 SOURCES += kademlia/data_server.cc
 SOURCES += kademlia/request_manager.cc
 SOURCES += kademlia/request.cc
