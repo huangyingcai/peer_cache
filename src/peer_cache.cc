@@ -1,4 +1,5 @@
 #include <QEventLoop>
+#include <QTemporaryFile>
 
 #include "includes.hh"
 #include "peer_cache.hh"
@@ -59,7 +60,27 @@ QIODevice* PeerCache::data(const QUrl& url)
 
     QKey key = PeerCache::ToKey(url);
 
-    return BlockingLookup(key);
+    QIODevice* device = BlockingLookup(key);
+    if (device) {
+        QTemporaryFile* temp_file = new QTemporaryFile();
+        temp_file->open();
+
+        device->seek(0);
+        QNetworkCacheMetaData meta_data;
+        QDataStream in(device);
+        in >> meta_data;
+
+        char data[1024]; // FIXME: constant
+        while (!device->atEnd()) {
+            qint64 bytes_read = device->read(data, 1024);
+            temp_file->write(data, bytes_read);
+        }
+
+        temp_file->seek(0);
+        return temp_file;
+    } else {
+        return device;
+    }
 }
 
 void PeerCache::insert(QIODevice* device)
