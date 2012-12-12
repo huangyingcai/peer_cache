@@ -9,52 +9,48 @@
 #include <QLineEdit>
 #include <QVBoxLayout>
 
-KademliaClientDialog::KademliaClientDialog() : QDialog()
+NetworkAccessDialog::NetworkAccessDialog() : QDialog()
 {
-    setWindowTitle("Kademlia Client");
+    network_manager_ = new NetworkAccessManager(this);
+    connect(network_manager_, SIGNAL(finished(QNetworkReply*)), this,
+        SLOT(GetRequestFinished(QNetworkReply*)));
 
-    client_ = new KademliaClient();
+    PeerCache* peer_cache = new PeerCache(this);
+    network_manager_->setCache(peer_cache);
 
-    add_file_button_ = new QPushButton("Add File", this);
-    add_file_button_->setAutoDefault(false);
-    connect(add_file_button_, SIGNAL(clicked()), this,
-        SLOT(DisplayFileDialog()));
-
-    find_input_ = new QLineEdit(this);
-    find_input_->setPlaceholderText("Enter a search query");
-    connect(find_input_, SIGNAL(returnPressed()), this,
-        SLOT(CaptureSearchRequestInput()));
+    get_input_ = new QLineEdit(this);
+    get_input_->setPlaceholderText("Enter a url");
+    connect(get_input_, SIGNAL(returnPressed()), this,
+        SLOT(CaptureGetRequestInput()));
 
     QVBoxLayout* layout = new QVBoxLayout();
-    layout->addWidget(add_file_button_);
-    layout->addWidget(find_input_);
+    layout->addWidget(get_input_);
     setLayout(layout);
 }
 
-KademliaClientDialog::~KademliaClientDialog()
+NetworkAccessDialog::~NetworkAccessDialog()
 {
-    delete client_;
     // QObject/parent relationships handle the rest
 }
 
-void KademliaClientDialog::CaptureSearchRequestInput()
+void KademliaClientDialog::CaptureGetRequestInput()
 {
-    QString find_string = find_input_->text();
+    QString url_string = get_input_->text();
 
     // Clear the messageInput to get ready for the next input message.
-    find_input_->clear();
+    get_input_->clear();
 
-    client_->SearchForFile(find_string);
+    QNetworkRequest request(QUrl(url_string));
+    request.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::PreferCache);
+    network_manager_->get(request);
 }
 
-void KademliaClientDialog::DisplayFileDialog()
+void NetworkAccessDialog::GetRequestFinished(QNetworkReply* reply)
 {
-    QString filename = QFileDialog::getOpenFileName(this,
-        "Select one or more files to share", "/home/accts/dkt2");
+    QVariant from_cache = reply->attribute(QNetworkRequest::SourceIsFromCacheAttribute);
+    qDebug() << "page from cache?" << from_cache.toBool();
 
-    if (!filename.isEmpty()) {
-        client_->AddFile(filename);
-    }
+    reply->deleteLater();
 }
 
 int main(int argc, char** argv)
@@ -71,7 +67,7 @@ int main(int argc, char** argv)
     QHostInfo info = QHostInfo::fromName(nodeInfoString);
     qDebug() << "Local host address: " << info.addresses().first();
 
-    KademliaClientDialog dialog;
+    NetworkAccessDialog dialog;
     dialog.show();
 
     // Enter the Qt main loop; everything else is event driven

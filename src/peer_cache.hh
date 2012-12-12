@@ -1,10 +1,17 @@
 #ifndef PEER_CACHE_HH
 #define PEER_CACHE_HH
 
-class PeerCache : public QNetworkDiskCache
+class PeerCache : public QAbstractNetworkCache
 {
     public:
+        static ToKey(const QUrl& url);
+
+        PeerCache();
+        ~PeerCache();
+
         QIODevice* BlockingLookup(const QUrl& url);
+
+        //TODO: set cache location
 
     private:
         KademliaClientThread* client_thread_;

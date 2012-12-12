@@ -5,23 +5,20 @@
 
 class QPushButton;
 class QLineEdit;
-class KademliaClient;
 
-class KademliaClientDialog : public QDialog
+class NetworkAccessDialog : public QDialog
 {
     Q_OBJECT
 
     public:
-        KademliaClientDialog();
-        ~KademliaClientDialog();
+        NetworkAccessDialog();
+        ~NetworkAccessDialog();
 
     public slots:
-        void CaptureSearchRequestInput();
-        void DisplayFileDialog();
+        void CaptureGetRequestInput();
 
     private:
-        KademliaClient* client_;
+        NetworkAccessManager* network_manager_;
 
-        QPushButton* add_file_button_;
-        QLineEdit* find_input_;
+        QLineEdit* get_input_;
 };

@@ -3,9 +3,31 @@
 #include "kademlia/kademlia_client.hh"
 #include "peer_cache.hh"
 
+// NOTE: Implementation loosely derived from QNetworkDiskCache (an actual
+// license to come)
+
+// TODO: get rid of this
+QByteArray PeerCache::ToKey(const QUrl& url)
+{
+    if (!url.isValid()) return QByteArray();
+
+    QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
+    return key;
+}
+
 PeerCache::PeerCache()
 {
     client_thread_ = new KademliaClientThread();
+    client_thread_->start();
+
+    prepared_devices_to_url_map_ = new QHash<QIODevice*, QUrl>();
+}
+
+PeerCache::~PeerCache()
+{
+    client_thread_->quit();
+    delete client_thread_;
+    delete prepared_devices_to_url_map_;
 }
 
 QIODevice* PeerCache::BlockingLookup(const QKey& key)
@@ -25,60 +47,104 @@ QIODevice* PeerCache::BlockingLookup(const QKey& key)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// QNetworkDiskCache overrides
+// QAbstractNetworkCache overrides
 
 virtual QIODevice* PeerCache::data(const QUrl& url)
 {
-    QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
+    qDebug() << "PeerCache::data for " << url;
+
+    if (!url.isValid()) return NULL;
+
     return BlockingLookup(key);
 }
 
 virtual void PeerCache::insert(QIODevice* device)
 {
+    qDebug() << "PeerCache::insert";
+
+    if (!prepared_devices_to_url_map_->value(device)) {
+        qDebug() << "Could not find device in prepared devices";
+        return;
+    }
+
     QUrl url = prepared_devices_to_url_map_->value(device);
-    QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
-    client_thread_->Store(key, device);
+    client_thread_->Store(PeerCache::ToKey(url), device); // Save into DHT
 
     prepared_devices_to_url_map_->removeAll(device);
 }
 
 virtual QNetworkCacheMetaData metaData(const QUrl& url)
 {
-    QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
-    QIODevice* data = BlockingLookup(url);
+    qDebug() << "PeerCache::metaData for " << url;
+
+    QIODevice* data = BlockingLookup(PeerCache::ToKey(url));
+
+    QNetworkCacheMetaData meta_data;
     if (data) {
-        // FIXME: read the data from it
-    } else {
-        // FIXME: return invalid metadata
+        QDataStream in(data);
+        in >> meta_data;
     }
     return meta_data;
 }
 
 virtual QIODevice* PeerCache::prepare(const QNetworkCacheMetaData& metaData)
 {
-    QIODevice* prepared_device = QNetworkDiskCache::prepare(metaData);
+    qDebug() << "PeerCache::prepare for " << metaData.url();
+
+    if (!metaData.isValid() || !metaData.url().isValid() ||
+            !metaData.saveToDisk()) {
+        qDebug() << "Invalid metadata";
+        return NULL;
+    }
 
     QUrl url = metaData.url();
-    prepared_devices_to_url_map_->insert(url, prepared_device);
+    QKey key = PeerCache::ToKey(url);
+    QFile* prepared_device = new QFile(QString("tmp/%1").arg(key.constData())); // FIXME: hard-coded directory
+    new_file->open(QIODevice::ReadWrite);
+
+    prepared_devices_to_url_map_->insert(prepared_devices_to_url_map_, url);
+
+    QDataStream out(prepared_device);
+    out << metaData;
 
     return prepared_device;
 }
 
-// Current action is to only delete locally
 virtual bool PeerCache::remove(const QUrl& url)
 {
-    QNetworkDiskCache::remove(url);
+    qDebug() << "PeerCache::remove for " << url;
+
+    client_thread_->Remove(PeerCache::ToKey(key));
 }
 
 virtual void PeerCache::updateMetaData(const QNetworkCacheMetaData& metaData)
 {
-    if (!QNetworkDiskCache::data(metaData.url())) { // don't have it locally
-        // Try to look it up
-        QUrl url = metaData.url();
-        QByteArray key = QCA::Hash("sha1").hash(url.toEncoded()).toByteArray();
-        QIODevice* data = BlockingLookup(url);
-        // FIXME: figure out store, etc; -- Blocking lookup stores in local dht
+    qDebug() << "PeerCache::updateMetaData()" << metaData.url();
+
+    if (!metaData.isValid() || !metaData.url().isValid() ||
+            !metaData.saveToDisk()) {
+        qDebug() << "Invalid metadata";
+        return;
     }
 
-    QNetworkDiskCache::updateMetaData(metaData);
+    QUrl url = metaData.url();
+    QIODevice* old_device = data(url);
+    if (!old_device) {
+        qDebug() << "No file cached";
+        return;
+    }
+
+    QIODevice* new_device = prepare(metaData);
+    if (!new_device) {
+        qDebug() << "No new device!" << url;
+        return;
+    }
+
+    char data[1024]; // FIXME: constant
+    while (!old_device->atEnd()) {
+        qint64 bytes_read = old_device->read(data, 1024);
+        new_device->write(data, bytes_read);
+    }
+    delete old_device;
+    insert(new_device);
 }
