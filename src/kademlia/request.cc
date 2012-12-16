@@ -2,8 +2,6 @@
 #include "includes.hh"
 #include "request.hh"
 
-#include <QtAlgorithms>
-
 // Simple Request
 
 SimpleRequest::~SimpleRequest()

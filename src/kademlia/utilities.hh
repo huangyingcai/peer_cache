@@ -4,7 +4,10 @@
 #include "types.hh"
 // FIXME: namespace this
 
-bool operator>(QBitArray& a1, QBitArray& a2);
-QBitArray Distance(QKey& key_a, QKey& key_b);
+namespace kademlia
+{
+    bool operator>(QBitArray& a1, QBitArray& a2);
+    QBitArray Distance(QKey& key_a, QKey& key_b);
+};
 
 #endif // KADEMLIA_UTILITIES_HH

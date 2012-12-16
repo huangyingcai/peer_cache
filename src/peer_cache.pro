@@ -18,6 +18,7 @@ HEADERS += kademlia/data_server.hh
 HEADERS += kademlia/request_manager.hh
 HEADERS += kademlia/request.hh
 HEADERS += kademlia/utilities.hh
+HEADERS += kademlia/constants.hh
 
 
 SOURCES += main.cc
@@ -28,3 +29,4 @@ SOURCES += kademlia/data_server.cc
 SOURCES += kademlia/request_manager.cc
 SOURCES += kademlia/request.cc
 SOURCES += kademlia/utilities.cc
+SOURCES += kademlia/constants.cc

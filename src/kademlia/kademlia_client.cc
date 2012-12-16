@@ -2,6 +2,8 @@
 #include "includes.hh"
 #include "kademlia_client.hh"
 
+using namespace kademlia;
+
 QStringList KademliaClient::SerializeNodes(QNodeList nodes)
 {
     QStringList node_strings;

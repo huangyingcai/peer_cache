@@ -29,7 +29,7 @@ class RequestManager : public QObject
         void IssueFindValue(QKey key);
 
         // Request management
-        void UpdateRequest(quint32 request_number, QNode destination); // == Close
+        void UpdateRequest(quint32 request_number, QNode destination); // Close
         void UpdateRequest(quint32 request_number, QNode destination,
             QNodeList nodes);
 
@@ -48,8 +48,9 @@ class RequestManager : public QObject
         QNodeList** buckets_;
         QHash<quint32, Request*>* requests_; // Map of internal request id to
                                              // request
-        QHash<quint32, quint32>* request_number_to_id_map_; // Map of external request
-                                                  // numbers to internal ids
+        QHash<quint32, quint32>* request_number_to_id_map_; // Map of external
+                                                            // request numbers
+                                                            // to internal ids
 
         // Helpers
         quint32 RandomId();

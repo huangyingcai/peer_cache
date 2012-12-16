@@ -3,6 +3,8 @@
 #include "request.hh"
 #include "request_manager.hh"
 
+using namespace kademlia;
+
 RequestManager::RequestManager(QNodeId id) : initialized_(false)
 {
     node_id_ = new QNodeId(id);

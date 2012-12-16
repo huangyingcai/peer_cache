@@ -2,6 +2,8 @@
 #include "includes.hh"
 #include "data_server.hh"
 
+using namespace kademlia;
+
 DataServer::DataServer()
 {
     quint16 p = kDefaultPort;
